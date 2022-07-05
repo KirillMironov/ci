@@ -1,0 +1,17 @@
+name: example
+
+steps:
+  - name: version
+    image: golang:1.18.3-alpine3.15
+    env:
+      - CI: true
+    command:
+      - go version
+      - which go
+
+  - name: echo env
+    image: busybox:1.35
+    env:
+      - CI: true
+    command:
+      - echo $CI
