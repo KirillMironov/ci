@@ -2,36 +2,37 @@ package main
 
 import (
 	"context"
-	"github.com/KirillMironov/ci/internal/domain"
-	"github.com/docker/docker/api/types"
+	"github.com/KirillMironov/ci/internal/service"
 	"github.com/docker/docker/client"
-	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"log"
 )
 
 func main() {
-	var pipeline domain.Pipeline
+	cli, err := client.NewClientWithOpts()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var (
+		parser   = service.Parser{}
+		executor = service.NewExecutor(cli)
+	)
 
 	data, err := ioutil.ReadFile("ci.yaml")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	err = yaml.Unmarshal(data, &pipeline)
+	pipeline, err := parser.ParsePipeline(string(data))
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	cli, err := client.NewClientWithOpts()
-	if err != nil {
-		log.Fatal(err)
+	for _, step := range pipeline.Steps {
+		err = executor.Execute(context.Background(), step)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
-
-	images, err := cli.ImageList(context.Background(), types.ImageListOptions{})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	log.Println(images)
 }

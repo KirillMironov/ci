@@ -3,15 +3,13 @@ name: example
 steps:
   - name: version
     image: golang:1.18.3-alpine3.15
-    env:
-      - CI: true
     command:
-      - go version
-      - which go
+      - go
+      - version
 
-  - name: echo env
+  - name: env
     image: busybox:1.35
     env:
-      - CI: true
+      - TEST=true
     command:
-      - echo $CI
+      - printenv
