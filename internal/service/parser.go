@@ -7,7 +7,6 @@ import (
 
 type Parser struct{}
 
-// ParsePipeline parses a pipeline from a string.
 func (p *Parser) ParsePipeline(str string) (pipeline domain.Pipeline, _ error) {
 	return pipeline, yaml.Unmarshal([]byte(str), &pipeline)
 }

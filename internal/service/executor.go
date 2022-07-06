@@ -18,22 +18,22 @@ func NewExecutor(cli *client.Client) *Executor {
 	return &Executor{cli: cli}
 }
 
-// Execute executes a provided step.
 func (e *Executor) Execute(ctx context.Context, step domain.Step) error {
 	config := &containertypes.Config{
 		Image: step.Image,
 		Env:   step.Environment,
 		Cmd:   step.Command,
+		Tty:   true,
 	}
 
 	logs, err := e.cli.ImagePull(ctx, config.Image, types.ImagePullOptions{})
 	if err != nil {
-		panic(err)
+		return err
 	}
 	defer logs.Close()
 
 	_, err = io.Copy(os.Stdout, logs)
-	if err != nil {
+	if err != nil && err != io.EOF {
 		return err
 	}
 
@@ -63,5 +63,9 @@ func (e *Executor) Execute(ctx context.Context, step domain.Step) error {
 	defer logs.Close()
 
 	_, err = io.Copy(os.Stdout, logs)
-	return err
+	if err != nil && err != io.EOF {
+		return err
+	}
+
+	return nil
 }
