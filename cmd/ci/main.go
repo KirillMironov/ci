@@ -1,38 +1,35 @@
 package main
 
 import (
-	"context"
 	"github.com/KirillMironov/ci/internal/service"
+	"github.com/KirillMironov/ci/internal/transport"
 	"github.com/docker/docker/client"
-	"io/ioutil"
-	"log"
+	"github.com/sirupsen/logrus"
+	"time"
 )
 
 func main() {
+	logger := logrus.New()
+	logger.SetFormatter(&logrus.TextFormatter{
+		ForceColors:     true,
+		FullTimestamp:   true,
+		TimestampFormat: "01|02 15:04:05.000",
+	})
+
 	cli, err := client.NewClientWithOpts()
 	if err != nil {
-		log.Fatal(err)
+		logger.Fatal(err)
 	}
 
 	var (
-		parser   = service.Parser{}
-		executor = service.NewExecutor(cli)
+		parser   = &service.Parser{}
+		executor = service.NewDockerExecutor(cli)
+		poller   = service.NewPoller(time.Minute, parser, executor, logger)
+		handler  = transport.NewHandler(poller)
 	)
 
-	data, err := ioutil.ReadFile("ci.yaml")
+	err = handler.InitRoutes().Run(":8080")
 	if err != nil {
-		log.Fatal(err)
-	}
-
-	pipeline, err := parser.ParsePipeline(string(data))
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	for _, step := range pipeline.Steps {
-		err = executor.Execute(context.Background(), step)
-		if err != nil {
-			log.Fatal(err)
-		}
+		logger.Fatal(err)
 	}
 }

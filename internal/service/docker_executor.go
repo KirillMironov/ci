@@ -10,15 +10,15 @@ import (
 	"os"
 )
 
-type Executor struct {
+type DockerExecutor struct {
 	cli *client.Client
 }
 
-func NewExecutor(cli *client.Client) *Executor {
-	return &Executor{cli: cli}
+func NewDockerExecutor(cli *client.Client) *DockerExecutor {
+	return &DockerExecutor{cli: cli}
 }
 
-func (e *Executor) Execute(ctx context.Context, step domain.Step) error {
+func (de *DockerExecutor) Execute(ctx context.Context, step domain.Step) error {
 	config := &containertypes.Config{
 		Image: step.Image,
 		Env:   step.Environment,
@@ -26,7 +26,7 @@ func (e *Executor) Execute(ctx context.Context, step domain.Step) error {
 		Tty:   true,
 	}
 
-	logs, err := e.cli.ImagePull(ctx, config.Image, types.ImagePullOptions{})
+	logs, err := de.cli.ImagePull(ctx, config.Image, types.ImagePullOptions{})
 	if err != nil {
 		return err
 	}
@@ -37,17 +37,17 @@ func (e *Executor) Execute(ctx context.Context, step domain.Step) error {
 		return err
 	}
 
-	container, err := e.cli.ContainerCreate(ctx, config, nil, nil, nil, "")
+	container, err := de.cli.ContainerCreate(ctx, config, nil, nil, nil, "")
 	if err != nil {
 		return err
 	}
 
-	err = e.cli.ContainerStart(ctx, container.ID, types.ContainerStartOptions{})
+	err = de.cli.ContainerStart(ctx, container.ID, types.ContainerStartOptions{})
 	if err != nil {
 		return err
 	}
 
-	statusCh, errCh := e.cli.ContainerWait(ctx, container.ID, containertypes.WaitConditionNotRunning)
+	statusCh, errCh := de.cli.ContainerWait(ctx, container.ID, containertypes.WaitConditionNotRunning)
 	select {
 	case err = <-errCh:
 		if err != nil {
@@ -56,7 +56,7 @@ func (e *Executor) Execute(ctx context.Context, step domain.Step) error {
 	case <-statusCh:
 	}
 
-	logs, err = e.cli.ContainerLogs(ctx, container.ID, types.ContainerLogsOptions{ShowStdout: true, ShowStderr: true})
+	logs, err = de.cli.ContainerLogs(ctx, container.ID, types.ContainerLogsOptions{ShowStdout: true, ShowStderr: true})
 	if err != nil {
 		return err
 	}
