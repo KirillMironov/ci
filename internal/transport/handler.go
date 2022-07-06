@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"github.com/KirillMironov/ci/internal/domain"
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"time"
@@ -11,7 +12,7 @@ type Handler struct {
 }
 
 type poller interface {
-	Poll()
+	Poll(vcs domain.VCS)
 }
 
 func NewHandler(poller poller) *Handler {
@@ -47,5 +48,8 @@ func (h Handler) addVCS(c *gin.Context) {
 		return
 	}
 
-	c.String(http.StatusOK, "%s %s %s", form.URL, form.PollingInterval, pollingInterval)
+	go h.poller.Poll(domain.VCS{
+		URL:             form.URL,
+		PollingInterval: pollingInterval,
+	})
 }

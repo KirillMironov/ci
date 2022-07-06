@@ -5,7 +5,6 @@ import (
 	"github.com/KirillMironov/ci/internal/transport"
 	"github.com/docker/docker/client"
 	"github.com/sirupsen/logrus"
-	"time"
 )
 
 func main() {
@@ -24,7 +23,7 @@ func main() {
 	var (
 		parser   = &service.Parser{}
 		executor = service.NewDockerExecutor(cli)
-		poller   = service.NewPoller(time.Minute, parser, executor, logger)
+		poller   = service.NewPoller(parser, executor, logger)
 		handler  = transport.NewHandler(poller)
 	)
 
