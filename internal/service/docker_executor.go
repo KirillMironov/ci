@@ -73,5 +73,5 @@ func (de DockerExecutor) Execute(ctx context.Context, step domain.Step, sourceCo
 		return err
 	}
 
-	return os.RemoveAll(sourceCodePath)
+	return nil
 }

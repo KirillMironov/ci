@@ -2,6 +2,6 @@ package mock
 
 type Cloner struct{}
 
-func (Cloner) Clone(string) (string, error) {
+func (Cloner) CloneRepository(string) (string, error) {
 	return "", nil
 }
