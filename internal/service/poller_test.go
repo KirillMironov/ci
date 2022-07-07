@@ -8,9 +8,9 @@ import (
 )
 
 func TestPoller_Poll(t *testing.T) {
-	var poller = NewPoller(mock.Parser{}, mock.Executor{}, mock.Logger{})
+	var poller = NewPoller(mock.Cloner{}, mock.Parser{}, mock.Executor{}, mock.Logger{})
 
-	poller.Poll(domain.VCS{
+	poller.Start(domain.VCS{
 		URL:             "https://github.com/KirillMironov/ci",
 		PollingInterval: time.Second * 2,
 	})

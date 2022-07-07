@@ -7,6 +7,6 @@ import (
 
 type Executor struct{}
 
-func (Executor) Execute(context.Context, domain.Step) error {
+func (Executor) Execute(context.Context, domain.Step, string) error {
 	return nil
 }

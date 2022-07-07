@@ -8,9 +8,14 @@ import (
 )
 
 type Poller struct {
+	cloner   cloner
 	parser   parser
 	executor executor
 	logger   logger.Logger
+}
+
+type cloner interface {
+	Clone(url string) (dir string, err error)
 }
 
 type parser interface {
@@ -18,18 +23,19 @@ type parser interface {
 }
 
 type executor interface {
-	Execute(ctx context.Context, step domain.Step) error
+	Execute(ctx context.Context, step domain.Step, sourceCodePath string) error
 }
 
-func NewPoller(parser parser, executor executor, logger logger.Logger) *Poller {
+func NewPoller(cloner cloner, parser parser, executor executor, logger logger.Logger) *Poller {
 	return &Poller{
+		cloner:   cloner,
 		parser:   parser,
 		executor: executor,
 		logger:   logger,
 	}
 }
 
-func (p Poller) Poll(vcs domain.VCS) {
+func (p Poller) Start(vcs domain.VCS) {
 	timer := time.NewTimer(vcs.PollingInterval)
 
 	for range timer.C {

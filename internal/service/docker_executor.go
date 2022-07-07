@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"github.com/KirillMironov/ci/internal/domain"
 	"github.com/docker/docker/api/types"
 	containertypes "github.com/docker/docker/api/types/container"
@@ -18,12 +19,15 @@ func NewDockerExecutor(cli *client.Client) *DockerExecutor {
 	return &DockerExecutor{cli: cli}
 }
 
-func (de DockerExecutor) Execute(ctx context.Context, step domain.Step) error {
+func (de DockerExecutor) Execute(ctx context.Context, step domain.Step, sourceCodePath string) error {
+	const workingDir = "/ci"
+
 	config := &containertypes.Config{
-		Image: step.Image,
-		Env:   step.Environment,
-		Cmd:   step.Command,
-		Tty:   true,
+		Image:      step.Image,
+		Env:        step.Environment,
+		Cmd:        step.Command,
+		Tty:        true,
+		WorkingDir: workingDir,
 	}
 
 	logs, err := de.cli.ImagePull(ctx, config.Image, types.ImagePullOptions{})
@@ -37,7 +41,9 @@ func (de DockerExecutor) Execute(ctx context.Context, step domain.Step) error {
 		return err
 	}
 
-	container, err := de.cli.ContainerCreate(ctx, config, nil, nil, nil, "")
+	container, err := de.cli.ContainerCreate(ctx, config, &containertypes.HostConfig{
+		Binds: []string{fmt.Sprintf("%s:%s", sourceCodePath, workingDir)},
+	}, nil, nil, "")
 	if err != nil {
 		return err
 	}
@@ -67,5 +73,5 @@ func (de DockerExecutor) Execute(ctx context.Context, step domain.Step) error {
 		return err
 	}
 
-	return nil
+	return os.RemoveAll(sourceCodePath)
 }

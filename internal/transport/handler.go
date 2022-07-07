@@ -12,7 +12,7 @@ type Handler struct {
 }
 
 type poller interface {
-	Poll(vcs domain.VCS)
+	Start(vcs domain.VCS)
 }
 
 func NewHandler(poller poller) *Handler {
@@ -48,7 +48,7 @@ func (h Handler) addVCS(c *gin.Context) {
 		return
 	}
 
-	go h.poller.Poll(domain.VCS{
+	go h.poller.Start(domain.VCS{
 		URL:             form.URL,
 		PollingInterval: pollingInterval,
 	})

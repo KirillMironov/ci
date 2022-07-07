@@ -19,11 +19,13 @@ func main() {
 	if err != nil {
 		logger.Fatal(err)
 	}
+	defer cli.Close()
 
 	var (
+		cloner   = &service.Cloner{}
 		parser   = &service.Parser{}
 		executor = service.NewDockerExecutor(cli)
-		poller   = service.NewPoller(parser, executor, logger)
+		poller   = service.NewPoller(cloner, parser, executor, logger)
 		handler  = transport.NewHandler(poller)
 	)
 
