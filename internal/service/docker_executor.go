@@ -18,7 +18,7 @@ func NewDockerExecutor(cli *client.Client) *DockerExecutor {
 	return &DockerExecutor{cli: cli}
 }
 
-func (de *DockerExecutor) Execute(ctx context.Context, step domain.Step) error {
+func (de DockerExecutor) Execute(ctx context.Context, step domain.Step) error {
 	config := &containertypes.Config{
 		Image: step.Image,
 		Env:   step.Environment,
