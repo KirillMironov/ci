@@ -7,6 +7,6 @@ import (
 
 type Parser struct{}
 
-func (Parser) ParsePipeline(str string) (pipeline domain.Pipeline, _ error) {
-	return pipeline, yaml.Unmarshal([]byte(str), &pipeline)
+func (Parser) ParsePipeline(b []byte) (pipeline domain.Pipeline, _ error) {
+	return pipeline, yaml.Unmarshal(b, &pipeline)
 }

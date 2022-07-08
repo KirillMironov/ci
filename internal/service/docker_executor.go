@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"github.com/KirillMironov/ci/internal/domain"
 	"github.com/docker/docker/api/types"
 	containertypes "github.com/docker/docker/api/types/container"
@@ -19,7 +18,7 @@ func NewDockerExecutor(cli *client.Client) *DockerExecutor {
 	return &DockerExecutor{cli: cli}
 }
 
-func (de DockerExecutor) Execute(ctx context.Context, step domain.Step, sourceCodePath string) error {
+func (de DockerExecutor) Execute(ctx context.Context, step domain.Step, sourceCode io.Reader) error {
 	const workingDir = "/ci"
 
 	config := &containertypes.Config{
@@ -30,20 +29,17 @@ func (de DockerExecutor) Execute(ctx context.Context, step domain.Step, sourceCo
 		WorkingDir: workingDir,
 	}
 
-	logs, err := de.cli.ImagePull(ctx, config.Image, types.ImagePullOptions{})
+	_, err := de.cli.ImagePull(ctx, config.Image, types.ImagePullOptions{})
 	if err != nil {
 		return err
 	}
-	defer logs.Close()
 
-	_, err = io.Copy(os.Stdout, logs)
-	if err != nil && err != io.EOF {
+	container, err := de.cli.ContainerCreate(ctx, config, nil, nil, nil, "")
+	if err != nil {
 		return err
 	}
 
-	container, err := de.cli.ContainerCreate(ctx, config, &containertypes.HostConfig{
-		Binds: []string{fmt.Sprintf("%s:%s", sourceCodePath, workingDir)},
-	}, nil, nil, "")
+	err = de.cli.CopyToContainer(ctx, container.ID, workingDir, sourceCode, types.CopyToContainerOptions{})
 	if err != nil {
 		return err
 	}
@@ -62,7 +58,10 @@ func (de DockerExecutor) Execute(ctx context.Context, step domain.Step, sourceCo
 	case <-statusCh:
 	}
 
-	logs, err = de.cli.ContainerLogs(ctx, container.ID, types.ContainerLogsOptions{ShowStdout: true, ShowStderr: true})
+	logs, err := de.cli.ContainerLogs(ctx, container.ID, types.ContainerLogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+	})
 	if err != nil {
 		return err
 	}

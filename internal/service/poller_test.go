@@ -4,13 +4,9 @@ import (
 	"github.com/KirillMironov/ci/internal/domain"
 	"github.com/docker/docker/client"
 	"github.com/sirupsen/logrus"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 )
-
-const repositoriesPath = "./.repositories"
 
 func TestPoller_Poll(t *testing.T) {
 	logger := logrus.New()
@@ -26,17 +22,8 @@ func TestPoller_Poll(t *testing.T) {
 	}
 	defer cli.Close()
 
-	err = os.Mkdir(repositoriesPath, 0750)
-	if err != nil {
-		logger.Fatal(err)
-	}
-	abs, err := filepath.Abs(repositoriesPath)
-	if err != nil {
-		logger.Fatal(err)
-	}
-
 	var (
-		cloner   = NewCloner(abs)
+		cloner   = &Cloner{}
 		parser   = &Parser{}
 		executor = NewDockerExecutor(cli)
 		poller   = NewPoller(cloner, parser, executor, logger)

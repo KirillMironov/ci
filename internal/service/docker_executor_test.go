@@ -20,6 +20,6 @@ func TestExecutor_Execute(t *testing.T) {
 		Image:       "busybox:1.35",
 		Environment: []string{"FOO=BAR"},
 		Command:     []string{"ls", "-la"},
-	}, "")
+	}, nil)
 	assert.NoError(t, err)
 }

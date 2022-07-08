@@ -28,7 +28,7 @@ steps:
 `
 	)
 
-	pipeline, err := parser.ParsePipeline(yaml)
+	pipeline, err := parser.ParsePipeline([]byte(yaml))
 	assert.NoError(t, err)
 	assert.Equal(t, domain.Pipeline{
 		Name: "example",
