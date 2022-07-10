@@ -7,6 +7,7 @@ import (
 	"github.com/KirillMironov/ci/internal/domain"
 	"github.com/KirillMironov/ci/pkg/logger"
 	"io"
+	"os"
 	"time"
 )
 
@@ -18,7 +19,7 @@ type Poller struct {
 }
 
 type cloner interface {
-	CloneRepository(url string) (sourceCode io.ReadCloser, err error)
+	CloneRepository(url string) (sourceCodePath string, remove func() error, err error)
 }
 
 type parser interface {
@@ -51,11 +52,15 @@ func (p Poller) Start(vcs domain.VCS) {
 }
 
 func (p Poller) poll(vcs domain.VCS) error {
-	sourceCode, err := p.cloner.CloneRepository(vcs.URL)
+	sourceCode, remove, err := p.cloner.CloneRepository(vcs.URL)
 	if err != nil {
 		return err
 	}
-	defer sourceCode.Close()
+	defer func() {
+		if err = remove(); err != nil {
+			p.logger.Error(err)
+		}
+	}()
 
 	yaml, err := p.findPipeline(sourceCode)
 	if err != nil {
@@ -68,19 +73,34 @@ func (p Poller) poll(vcs domain.VCS) error {
 	}
 
 	for _, step := range pipeline.Steps {
-		err = p.executor.Execute(context.Background(), step, sourceCode)
+		file, err := os.Open(sourceCode)
 		if err != nil {
 			return err
 		}
+
+		err = p.executor.Execute(context.Background(), step, file)
+		if err != nil {
+			p.logger.Error(err)
+			file.Close()
+			return err
+		}
+
+		file.Close()
 	}
 
 	return nil
 }
 
-func (Poller) findPipeline(archive io.Reader) ([]byte, error) {
+func (Poller) findPipeline(path string) ([]byte, error) {
 	const yamlFilename = "ci.yaml"
 
-	tarReader := tar.NewReader(archive)
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	tarReader := tar.NewReader(file)
 
 	buf := bytes.NewBuffer(nil)
 

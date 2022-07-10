@@ -11,36 +11,46 @@ import (
 
 type Cloner struct{}
 
-func (c Cloner) CloneRepository(url string) (sourceCode io.ReadCloser, err error) {
-	dir, err := os.MkdirTemp(os.TempDir(), "")
+func (c Cloner) CloneRepository(url string) (sourceCodePath string, remove func() error, err error) {
+	dir, err := os.MkdirTemp("", "")
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 	defer os.RemoveAll(dir)
 
 	_, err = git.PlainClone(dir, false, &git.CloneOptions{URL: url})
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 
-	return c.compress(dir)
+	sourceCodePath, err = c.compress(dir)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return sourceCodePath, func() error { return os.Remove(sourceCodePath) }, nil
 }
 
-func (Cloner) compress(srcPath string) (io.ReadCloser, error) {
-	archive, err := os.CreateTemp(os.TempDir(), "")
+func (Cloner) compress(srcPath string) (string, error) {
+	archive, err := os.CreateTemp("", "")
 	if err != nil {
-		return nil, err
+		return "", err
 	}
+	defer archive.Close()
 
 	tw := tar.NewWriter(archive)
 
 	err = filepath.Walk(srcPath, func(path string, info os.FileInfo, err error) error {
+		if info.Mode().IsDir() {
+			return nil
+		}
+
 		header, err := tar.FileInfoHeader(info, path)
 		if err != nil {
 			return err
 		}
 
-		header.Name = strings.TrimPrefix(filepath.ToSlash(path), srcPath+string(filepath.Separator))
+		header.Name = strings.TrimPrefix(path, srcPath+string(os.PathSeparator))
 
 		err = tw.WriteHeader(header)
 		if err != nil {
@@ -62,8 +72,9 @@ func (Cloner) compress(srcPath string) (io.ReadCloser, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		tw.Close()
+		return "", err
 	}
 
-	return archive, tw.Close()
+	return archive.Name(), tw.Close()
 }

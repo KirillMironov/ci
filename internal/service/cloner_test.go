@@ -8,8 +8,8 @@ import (
 func TestCloner_Clone(t *testing.T) {
 	var cloner Cloner
 
-	arch, err := cloner.CloneRepository("https://github.com/KirillMironov/kube")
+	archive, remove, err := cloner.CloneRepository("https://github.com/KirillMironov/kube")
 	assert.NoError(t, err)
-	assert.NotNil(t, arch)
-	arch.Close()
+	assert.NotNil(t, archive)
+	assert.NoError(t, remove())
 }

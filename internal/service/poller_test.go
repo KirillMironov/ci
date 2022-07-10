@@ -4,6 +4,7 @@ import (
 	"github.com/KirillMironov/ci/internal/domain"
 	"github.com/docker/docker/client"
 	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
 )
@@ -17,9 +18,7 @@ func TestPoller_Poll(t *testing.T) {
 	})
 
 	cli, err := client.NewClientWithOpts()
-	if err != nil {
-		logger.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer cli.Close()
 
 	var (
