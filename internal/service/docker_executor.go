@@ -18,7 +18,7 @@ func NewDockerExecutor(cli *client.Client) *DockerExecutor {
 	return &DockerExecutor{cli: cli}
 }
 
-func (de DockerExecutor) Execute(ctx context.Context, step domain.Step, sourceCode io.Reader) error {
+func (de DockerExecutor) Execute(ctx context.Context, step domain.Step, sourceCodeArchive io.Reader) error {
 	const workingDir = "/ci"
 
 	config := &containertypes.Config{
@@ -39,7 +39,7 @@ func (de DockerExecutor) Execute(ctx context.Context, step domain.Step, sourceCo
 		return err
 	}
 
-	err = de.cli.CopyToContainer(ctx, container.ID, workingDir, sourceCode, types.CopyToContainerOptions{})
+	err = de.cli.CopyToContainer(ctx, container.ID, workingDir, sourceCodeArchive, types.CopyToContainerOptions{})
 	if err != nil {
 		return err
 	}

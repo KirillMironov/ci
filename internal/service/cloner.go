@@ -11,7 +11,7 @@ import (
 
 type Cloner struct{}
 
-func (c Cloner) CloneRepository(url string) (sourceCodePath string, remove func() error, err error) {
+func (c Cloner) CloneRepository(url string) (sourceCodeArchivePath string, removeArchive func() error, err error) {
 	dir, err := os.MkdirTemp("", "")
 	if err != nil {
 		return "", nil, err
@@ -23,12 +23,12 @@ func (c Cloner) CloneRepository(url string) (sourceCodePath string, remove func(
 		return "", nil, err
 	}
 
-	sourceCodePath, err = c.compress(dir)
+	sourceCodeArchivePath, err = c.compress(dir)
 	if err != nil {
 		return "", nil, err
 	}
 
-	return sourceCodePath, func() error { return os.Remove(sourceCodePath) }, nil
+	return sourceCodeArchivePath, func() error { return os.Remove(sourceCodeArchivePath) }, nil
 }
 
 func (Cloner) compress(srcPath string) (string, error) {

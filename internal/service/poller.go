@@ -19,7 +19,7 @@ type Poller struct {
 }
 
 type cloner interface {
-	CloneRepository(url string) (sourceCodePath string, remove func() error, err error)
+	CloneRepository(url string) (sourceCodeArchivePath string, removeArchive func() error, err error)
 }
 
 type parser interface {
@@ -27,7 +27,7 @@ type parser interface {
 }
 
 type executor interface {
-	Execute(ctx context.Context, step domain.Step, sourceCode io.Reader) error
+	Execute(ctx context.Context, step domain.Step, sourceCodeArchive io.Reader) error
 }
 
 func NewPoller(cloner cloner, parser parser, executor executor, logger logger.Logger) *Poller {
@@ -52,7 +52,7 @@ func (p Poller) Start(vcs domain.VCS) {
 }
 
 func (p Poller) poll(vcs domain.VCS) error {
-	sourceCode, remove, err := p.cloner.CloneRepository(vcs.URL)
+	sourceCodePath, remove, err := p.cloner.CloneRepository(vcs.URL)
 	if err != nil {
 		return err
 	}
@@ -62,7 +62,7 @@ func (p Poller) poll(vcs domain.VCS) error {
 		}
 	}()
 
-	yaml, err := p.findPipeline(sourceCode)
+	yaml, err := p.findPipeline(sourceCodePath)
 	if err != nil {
 		return err
 	}
@@ -73,7 +73,7 @@ func (p Poller) poll(vcs domain.VCS) error {
 	}
 
 	for _, step := range pipeline.Steps {
-		file, err := os.Open(sourceCode)
+		file, err := os.Open(sourceCodePath)
 		if err != nil {
 			return err
 		}
@@ -91,10 +91,10 @@ func (p Poller) poll(vcs domain.VCS) error {
 	return nil
 }
 
-func (Poller) findPipeline(path string) ([]byte, error) {
-	const yamlFilename = "ci.yaml"
+func (Poller) findPipeline(archivePath string) ([]byte, error) {
+	const yamlFilename = ".ci.yaml"
 
-	file, err := os.Open(path)
+	file, err := os.Open(archivePath)
 	if err != nil {
 		return nil, err
 	}
