@@ -7,18 +7,22 @@ import (
 	"time"
 )
 
+// Handler is a handler for the HTTP requests.
 type Handler struct {
 	poller poller
 }
 
+// poller is a poller for the VCS.
 type poller interface {
 	Start(vcs domain.VCS)
 }
 
+// NewHandler creates a new Handler.
 func NewHandler(poller poller) *Handler {
 	return &Handler{poller: poller}
 }
 
+// InitRoutes initializes the routes.
 func (h Handler) InitRoutes() *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
@@ -30,6 +34,7 @@ func (h Handler) InitRoutes() *gin.Engine {
 	return router
 }
 
+// addVCS starts VCS polling with a given interval.
 func (h Handler) addVCS(c *gin.Context) {
 	var form struct {
 		URL             string `json:"url" binding:"required"`

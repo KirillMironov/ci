@@ -10,14 +10,17 @@ import (
 	"os"
 )
 
+// DockerExecutor is a service that can execute a step in a docker container.
 type DockerExecutor struct {
 	cli *client.Client
 }
 
+// NewDockerExecutor creates a new DockerExecutor with a provided docker client.
 func NewDockerExecutor(cli *client.Client) *DockerExecutor {
 	return &DockerExecutor{cli: cli}
 }
 
+// Execute executes a step in a container.
 func (de DockerExecutor) Execute(ctx context.Context, step domain.Step, sourceCodeArchive io.Reader) error {
 	const workingDir = "/ci"
 

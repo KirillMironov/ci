@@ -11,6 +11,7 @@ import (
 	"time"
 )
 
+// Poller is a service that can poll a VCS and execute a pipeline.
 type Poller struct {
 	cloner   cloner
 	parser   parser
@@ -18,18 +19,22 @@ type Poller struct {
 	logger   logger.Logger
 }
 
+// cloner is a service that can clone a repository.
 type cloner interface {
 	CloneRepository(url string) (sourceCodeArchivePath string, removeArchive func() error, err error)
 }
 
+// parser is a service that can parse a pipeline.
 type parser interface {
 	ParsePipeline(b []byte) (domain.Pipeline, error)
 }
 
+// executor is a service that can execute pipeline steps.
 type executor interface {
 	Execute(ctx context.Context, step domain.Step, sourceCodeArchive io.Reader) error
 }
 
+// NewPoller creates a new Poller.
 func NewPoller(cloner cloner, parser parser, executor executor, logger logger.Logger) *Poller {
 	return &Poller{
 		cloner:   cloner,
@@ -39,6 +44,7 @@ func NewPoller(cloner cloner, parser parser, executor executor, logger logger.Lo
 	}
 }
 
+// Start starts VCS polling with a given interval.
 func (p Poller) Start(vcs domain.VCS) {
 	timer := time.NewTimer(vcs.PollingInterval)
 
@@ -51,6 +57,7 @@ func (p Poller) Start(vcs domain.VCS) {
 	}
 }
 
+// poll polls fetches a pipeline from a VCS and executes it.
 func (p Poller) poll(vcs domain.VCS) error {
 	sourceCodePath, remove, err := p.cloner.CloneRepository(vcs.URL)
 	if err != nil {
@@ -91,6 +98,7 @@ func (p Poller) poll(vcs domain.VCS) error {
 	return nil
 }
 
+// findPipeline finds a pipeline in a source code archive.
 func (Poller) findPipeline(archivePath string) ([]byte, error) {
 	const yamlFilename = ".ci.yaml"
 

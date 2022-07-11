@@ -9,8 +9,10 @@ import (
 	"strings"
 )
 
+// Cloner is a service that can clone a repository.
 type Cloner struct{}
 
+// CloneRepository clones a repository to a temporary directory and returns the path to the compressed archive.
 func (c Cloner) CloneRepository(url string) (sourceCodeArchivePath string, removeArchive func() error, err error) {
 	dir, err := os.MkdirTemp("", "")
 	if err != nil {
@@ -31,6 +33,7 @@ func (c Cloner) CloneRepository(url string) (sourceCodeArchivePath string, remov
 	return sourceCodeArchivePath, func() error { return os.Remove(sourceCodeArchivePath) }, nil
 }
 
+// compress compresses a directory to a tar archive.
 func (Cloner) compress(srcPath string) (string, error) {
 	archive, err := os.CreateTemp("", "")
 	if err != nil {
