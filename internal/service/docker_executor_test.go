@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestExecutor_Execute(t *testing.T) {
+func TestDockerExecutor_ExecuteStep(t *testing.T) {
 	cli, err := client.NewClientWithOpts()
 	require.NoError(t, err)
 

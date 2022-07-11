@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func TestPoller_Poll(t *testing.T) {
+func TestPoller_poll(t *testing.T) {
 	logger := logrus.New()
 	logger.SetFormatter(&logrus.TextFormatter{
 		ForceColors:     true,
@@ -23,9 +23,10 @@ func TestPoller_Poll(t *testing.T) {
 
 	var (
 		cloner   = &Cloner{}
+		archiver = &Archiver{}
 		parser   = &Parser{}
 		executor = NewDockerExecutor(cli)
-		poller   = NewPoller(cloner, parser, executor, logger)
+		poller   = NewPoller(".ci.yaml", cloner, archiver, parser, executor, logger)
 	)
 
 	poller.Start(domain.VCS{

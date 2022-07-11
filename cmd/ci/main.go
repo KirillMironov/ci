@@ -26,9 +26,10 @@ func main() {
 	// App
 	var (
 		cloner   = &service.Cloner{}
+		archiver = &service.Archiver{}
 		parser   = &service.Parser{}
 		executor = service.NewDockerExecutor(cli)
-		poller   = service.NewPoller(cloner, parser, executor, logger)
+		poller   = service.NewPoller(".ci.yaml", cloner, archiver, parser, executor, logger)
 		handler  = transport.NewHandler(poller)
 	)
 

@@ -7,9 +7,8 @@ import (
 )
 
 func TestParser_ParsePipeline(t *testing.T) {
-	var (
-		parser Parser
-		yaml   = `
+	var parser Parser
+	var yaml = `
 name: example
 
 steps:
@@ -26,7 +25,6 @@ steps:
     command:
       - printenv
 `
-	)
 
 	pipeline, err := parser.ParsePipeline([]byte(yaml))
 	assert.NoError(t, err)
