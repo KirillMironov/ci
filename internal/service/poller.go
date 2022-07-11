@@ -31,7 +31,7 @@ type parser interface {
 
 // executor is a service that can execute pipeline steps.
 type executor interface {
-	Execute(ctx context.Context, step domain.Step, sourceCodeArchive io.Reader) error
+	Execute(ctx context.Context, step domain.Step, sourceCodeArchive io.Reader) (logs io.ReadCloser, err error)
 }
 
 // NewPoller creates a new Poller.
@@ -57,9 +57,9 @@ func (p Poller) Start(vcs domain.VCS) {
 	}
 }
 
-// poll polls fetches a pipeline from a VCS and executes it.
+// poll clones a repository and executes a pipeline.
 func (p Poller) poll(vcs domain.VCS) error {
-	sourceCodePath, remove, err := p.cloner.CloneRepository(vcs.URL)
+	sourceCodeArchivePath, remove, err := p.cloner.CloneRepository(vcs.URL)
 	if err != nil {
 		return err
 	}
@@ -69,7 +69,7 @@ func (p Poller) poll(vcs domain.VCS) error {
 		}
 	}()
 
-	yaml, err := p.findPipeline(sourceCodePath)
+	yaml, err := p.findPipeline(sourceCodeArchivePath)
 	if err != nil {
 		return err
 	}
@@ -80,22 +80,31 @@ func (p Poller) poll(vcs domain.VCS) error {
 	}
 
 	for _, step := range pipeline.Steps {
-		file, err := os.Open(sourceCodePath)
+		err = p.executeStep(step, sourceCodeArchivePath)
 		if err != nil {
 			return err
 		}
-
-		err = p.executor.Execute(context.Background(), step, file)
-		if err != nil {
-			p.logger.Error(err)
-			file.Close()
-			return err
-		}
-
-		file.Close()
 	}
 
 	return nil
+}
+
+// executeStep executes a pipeline step.
+func (p Poller) executeStep(step domain.Step, sourceCodeArchivePath string) error {
+	archive, err := os.Open(sourceCodeArchivePath)
+	if err != nil {
+		return err
+	}
+	defer archive.Close()
+
+	logs, err := p.executor.Execute(context.Background(), step, archive)
+	if err != nil {
+		return err
+	}
+	defer logs.Close()
+
+	_, err = io.Copy(os.Stdout, logs)
+	return err
 }
 
 // findPipeline finds a pipeline in a source code archive.

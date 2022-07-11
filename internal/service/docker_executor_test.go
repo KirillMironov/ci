@@ -15,11 +15,12 @@ func TestExecutor_Execute(t *testing.T) {
 
 	var executor = NewDockerExecutor(cli)
 
-	err = executor.Execute(context.Background(), domain.Step{
+	logs, err := executor.Execute(context.Background(), domain.Step{
 		Name:        "ls",
 		Image:       "busybox:1.35",
 		Environment: []string{"FOO=BAR"},
 		Command:     []string{"ls", "-la"},
 	}, nil)
 	assert.NoError(t, err)
+	assert.NotEmpty(t, logs)
 }
