@@ -15,7 +15,7 @@ func TestExecutor_Execute(t *testing.T) {
 
 	var executor = NewDockerExecutor(cli)
 
-	logs, err := executor.Execute(context.Background(), domain.Step{
+	logs, err := executor.ExecuteStep(context.Background(), domain.Step{
 		Name:        "ls",
 		Image:       "busybox:1.35",
 		Environment: []string{"FOO=BAR"},

@@ -31,7 +31,7 @@ type parser interface {
 
 // executor is a service that can execute pipeline steps.
 type executor interface {
-	Execute(ctx context.Context, step domain.Step, sourceCodeArchive io.Reader) (logs io.ReadCloser, err error)
+	ExecuteStep(ctx context.Context, step domain.Step, sourceCodeArchive io.Reader) (logs io.ReadCloser, err error)
 }
 
 // NewPoller creates a new Poller.
@@ -97,7 +97,7 @@ func (p Poller) executeStep(step domain.Step, sourceCodeArchivePath string) erro
 	}
 	defer archive.Close()
 
-	logs, err := p.executor.Execute(context.Background(), step, archive)
+	logs, err := p.executor.ExecuteStep(context.Background(), step, archive)
 	if err != nil {
 		return err
 	}

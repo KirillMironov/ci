@@ -44,6 +44,9 @@ func (Cloner) compress(srcPath string) (string, error) {
 	tw := tar.NewWriter(archive)
 
 	err = filepath.Walk(srcPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
 		if info.Mode().IsDir() {
 			return nil
 		}

@@ -19,8 +19,8 @@ func NewDockerExecutor(cli *client.Client) *DockerExecutor {
 	return &DockerExecutor{cli: cli}
 }
 
-// Execute executes a step in a container.
-func (de DockerExecutor) Execute(ctx context.Context, step domain.Step, sourceCodeArchive io.Reader) (
+// ExecuteStep executes a step in a container.
+func (de DockerExecutor) ExecuteStep(ctx context.Context, step domain.Step, sourceCodeArchive io.Reader) (
 	logs io.ReadCloser, err error) {
 	const workingDir = "/ci"
 
