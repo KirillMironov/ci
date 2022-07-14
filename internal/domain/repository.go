@@ -2,8 +2,8 @@ package domain
 
 import "time"
 
-// VCS represents a version control system.
-type VCS struct {
+// Repository represents a source code repository.
+type Repository struct {
 	URL             string
 	PollingInterval time.Duration
 }

@@ -12,9 +12,9 @@ type Handler struct {
 	poller poller
 }
 
-// poller is a poller for the VCS.
+// poller is a poller for the source code repository.
 type poller interface {
-	Start(vcs domain.VCS)
+	Start(domain.Repository)
 }
 
 // NewHandler creates a new Handler.
@@ -29,13 +29,13 @@ func (h Handler) InitRoutes() *gin.Engine {
 	router.Use(gin.Recovery())
 	api := router.Group("/api/v1")
 	{
-		api.POST("/vcs", h.addVCS)
+		api.POST("/repository", h.addRepository)
 	}
 	return router
 }
 
-// addVCS starts VCS polling with a given interval.
-func (h Handler) addVCS(c *gin.Context) {
+// addRepository starts repository polling with a given interval.
+func (h Handler) addRepository(c *gin.Context) {
 	var form struct {
 		URL             string `json:"url" binding:"required"`
 		PollingInterval string `json:"polling_interval" binding:"required"`
@@ -53,7 +53,7 @@ func (h Handler) addVCS(c *gin.Context) {
 		return
 	}
 
-	go h.poller.Start(domain.VCS{
+	go h.poller.Start(domain.Repository{
 		URL:             form.URL,
 		PollingInterval: pollingInterval,
 	})

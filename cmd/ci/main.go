@@ -2,8 +2,8 @@ package main
 
 import (
 	"github.com/KirillMironov/ci/config"
-	"github.com/KirillMironov/ci/internal/repository"
 	"github.com/KirillMironov/ci/internal/service"
+	"github.com/KirillMironov/ci/internal/storage"
 	"github.com/KirillMironov/ci/internal/transport"
 	"github.com/boltdb/bolt"
 	"github.com/docker/docker/client"
@@ -33,14 +33,15 @@ func main() {
 	}
 	defer cli.Close()
 
-	// App
+	// BoltDB
 	db, err := bolt.Open(cfg.BoltDBPath, 0600, &bolt.Options{Timeout: time.Second})
 	if err != nil {
 		logger.Fatal(err)
 	}
 	defer db.Close()
 
-	vcsRepository, err := repository.NewVCS(db)
+	// App
+	repositories, err := storage.NewRepositories(db, "repositories")
 	if err != nil {
 		logger.Fatal(err)
 	}
@@ -50,7 +51,7 @@ func main() {
 		archiver = &service.Archiver{}
 		parser   = &service.Parser{}
 		executor = service.NewDockerExecutor(cli)
-		poller   = service.NewPoller(cfg.CIFilename, cloner, archiver, parser, executor, vcsRepository, logger)
+		poller   = service.NewPoller(cfg.CIFilename, cloner, archiver, parser, executor, repositories, logger)
 		handler  = transport.NewHandler(poller)
 	)
 
