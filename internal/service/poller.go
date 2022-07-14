@@ -11,12 +11,13 @@ import (
 
 // Poller is a service that can poll a VCS and execute a pipeline.
 type Poller struct {
-	yamlFilename string
-	cloner       cloner
-	archiver     archiver
-	parser       parser
-	executor     executor
-	logger       logger.Logger
+	yamlFilename  string
+	cloner        cloner
+	archiver      archiver
+	parser        parser
+	executor      executor
+	vcsRepository vcsRepository
+	logger        logger.Logger
 }
 
 type (
@@ -37,23 +38,49 @@ type (
 	executor interface {
 		ExecuteStep(ctx context.Context, step domain.Step, sourceCodeArchive io.Reader) (logs io.ReadCloser, err error)
 	}
+	// vcsRepository stores information about a VCS repository.
+	vcsRepository interface {
+		Put(vcs domain.VCS) error
+		GetAll() (arr []domain.VCS, err error)
+	}
 )
 
 // NewPoller creates a new Poller.
 func NewPoller(yamlFilename string, cloner cloner, archiver archiver, parser parser, executor executor,
-	logger logger.Logger) *Poller {
+	vcsRepository vcsRepository, logger logger.Logger) *Poller {
 	return &Poller{
-		yamlFilename: yamlFilename,
-		cloner:       cloner,
-		archiver:     archiver,
-		parser:       parser,
-		executor:     executor,
-		logger:       logger,
+		yamlFilename:  yamlFilename,
+		cloner:        cloner,
+		archiver:      archiver,
+		parser:        parser,
+		executor:      executor,
+		vcsRepository: vcsRepository,
+		logger:        logger,
 	}
+}
+
+// Recover starts polling saved repositories.
+func (p Poller) Recover() error {
+	arr, err := p.vcsRepository.GetAll()
+	if err != nil {
+		return err
+	}
+
+	for _, vcs := range arr {
+		go p.Start(vcs)
+	}
+
+	return nil
 }
 
 // Start starts VCS polling with a given interval.
 func (p Poller) Start(vcs domain.VCS) {
+	err := p.vcsRepository.Put(vcs)
+	if err != nil {
+		p.logger.Errorf("failed to put VCS %q: %v", vcs.URL, err)
+		return
+	}
+
 	timer := time.NewTimer(vcs.PollingInterval)
 
 	for range timer.C {
