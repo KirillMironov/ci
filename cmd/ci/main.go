@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/KirillMironov/ci/config"
 	"github.com/KirillMironov/ci/internal/repository"
 	"github.com/KirillMironov/ci/internal/service"
 	"github.com/KirillMironov/ci/internal/transport"
@@ -19,6 +20,12 @@ func main() {
 		TimestampFormat: "01|02 15:04:05.000",
 	})
 
+	// Config
+	cfg, err := config.Load()
+	if err != nil {
+		logger.Fatal(err)
+	}
+
 	// Docker Client
 	cli, err := client.NewClientWithOpts()
 	if err != nil {
@@ -27,7 +34,7 @@ func main() {
 	defer cli.Close()
 
 	// App
-	db, err := bolt.Open("ci.db", 0600, &bolt.Options{Timeout: time.Second})
+	db, err := bolt.Open(cfg.BoltDBPath, 0600, &bolt.Options{Timeout: time.Second})
 	if err != nil {
 		logger.Fatal(err)
 	}
@@ -43,7 +50,7 @@ func main() {
 		archiver = &service.Archiver{}
 		parser   = &service.Parser{}
 		executor = service.NewDockerExecutor(cli)
-		poller   = service.NewPoller(".ci.yaml", cloner, archiver, parser, executor, vcsRepository, logger)
+		poller   = service.NewPoller(cfg.CIFilename, cloner, archiver, parser, executor, vcsRepository, logger)
 		handler  = transport.NewHandler(poller)
 	)
 
@@ -53,7 +60,7 @@ func main() {
 	}
 
 	// HTTP Server
-	err = handler.InitRoutes().Run(":8080")
+	err = handler.InitRoutes().Run(":" + cfg.Port)
 	if err != nil {
 		logger.Fatal(err)
 	}

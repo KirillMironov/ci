@@ -11,7 +11,7 @@ import (
 
 // Poller is a service that can poll a VCS and execute a pipeline.
 type Poller struct {
-	yamlFilename  string
+	ciFilename    string
 	cloner        cloner
 	archiver      archiver
 	parser        parser
@@ -46,10 +46,10 @@ type (
 )
 
 // NewPoller creates a new Poller.
-func NewPoller(yamlFilename string, cloner cloner, archiver archiver, parser parser, executor executor,
+func NewPoller(ciFilename string, cloner cloner, archiver archiver, parser parser, executor executor,
 	vcsRepository vcsRepository, logger logger.Logger) *Poller {
 	return &Poller{
-		yamlFilename:  yamlFilename,
+		ciFilename:    ciFilename,
 		cloner:        cloner,
 		archiver:      archiver,
 		parser:        parser,
@@ -114,7 +114,7 @@ func (p Poller) poll(vcs domain.VCS) error {
 		}
 	}()
 
-	yaml, err := p.archiver.FindFile(p.yamlFilename, archivePath)
+	yaml, err := p.archiver.FindFile(p.ciFilename, archivePath)
 	if err != nil {
 		return err
 	}
