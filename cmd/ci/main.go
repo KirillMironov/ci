@@ -50,7 +50,7 @@ func main() {
 		cloner   = &service.Cloner{}
 		archiver = &service.Archiver{}
 		parser   = &service.Parser{}
-		executor = service.NewDockerExecutor(cli)
+		executor = service.NewDockerExecutor(cli, cfg.ContainerWorkingDir)
 		poller   = service.NewPoller(cfg.CIFilename, cloner, archiver, parser, executor, repositories, logger)
 		handler  = transport.NewHandler(poller)
 	)

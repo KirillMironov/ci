@@ -11,25 +11,27 @@ import (
 
 // DockerExecutor is a service that can execute a step in a docker container.
 type DockerExecutor struct {
-	cli *client.Client
+	cli        *client.Client
+	workingDir string
 }
 
 // NewDockerExecutor creates a new DockerExecutor with a provided docker client.
-func NewDockerExecutor(cli *client.Client) *DockerExecutor {
-	return &DockerExecutor{cli: cli}
+func NewDockerExecutor(cli *client.Client, workingDir string) *DockerExecutor {
+	return &DockerExecutor{
+		cli:        cli,
+		workingDir: workingDir,
+	}
 }
 
 // ExecuteStep executes a step in a container.
 func (de DockerExecutor) ExecuteStep(ctx context.Context, step domain.Step, sourceCodeArchive io.Reader) (
 	logs io.ReadCloser, err error) {
-	const workingDir = "/ci"
-
 	config := &containertypes.Config{
 		Image:      step.Image,
 		Env:        step.Environment,
 		Cmd:        step.Command,
 		Tty:        true,
-		WorkingDir: workingDir,
+		WorkingDir: de.workingDir,
 	}
 
 	_, err = de.cli.ImagePull(ctx, config.Image, types.ImagePullOptions{})
@@ -42,7 +44,7 @@ func (de DockerExecutor) ExecuteStep(ctx context.Context, step domain.Step, sour
 		return nil, err
 	}
 
-	err = de.cli.CopyToContainer(ctx, container.ID, workingDir, sourceCodeArchive, types.CopyToContainerOptions{})
+	err = de.cli.CopyToContainer(ctx, container.ID, de.workingDir, sourceCodeArchive, types.CopyToContainerOptions{})
 	if err != nil {
 		return nil, err
 	}

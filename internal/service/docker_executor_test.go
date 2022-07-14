@@ -13,7 +13,7 @@ func TestDockerExecutor_ExecuteStep(t *testing.T) {
 	cli, err := client.NewClientWithOpts()
 	require.NoError(t, err)
 
-	var executor = NewDockerExecutor(cli)
+	var executor = NewDockerExecutor(cli, "/ci")
 
 	logs, err := executor.ExecuteStep(context.Background(), domain.Step{
 		Name:        "ls",
