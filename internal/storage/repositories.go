@@ -1,9 +1,10 @@
 package storage
 
 import (
+	"bytes"
+	"encoding/gob"
 	"github.com/KirillMironov/ci/internal/domain"
 	"github.com/boltdb/bolt"
-	"time"
 )
 
 // Repositories is a boltdb-based repositories storage.
@@ -26,9 +27,15 @@ func NewRepositories(db *bolt.DB, bucket string) (*Repositories, error) {
 
 // Put adds or updates a repository.
 func (r Repositories) Put(repo domain.Repository) error {
+	var buf bytes.Buffer
+	encoder := gob.NewEncoder(&buf)
+	if err := encoder.Encode(repo); err != nil {
+		return err
+	}
+
 	return r.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(r.bucket))
-		return b.Put([]byte(repo.URL), []byte(repo.PollingInterval.String()))
+		return b.Put([]byte(repo.URL), buf.Bytes())
 	})
 }
 
@@ -37,14 +44,12 @@ func (r Repositories) GetAll() (repos []domain.Repository, err error) {
 	err = r.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(r.bucket))
 		return b.ForEach(func(k, v []byte) error {
-			interval, err := time.ParseDuration(string(v))
-			if err != nil {
+			var repo domain.Repository
+			decoder := gob.NewDecoder(bytes.NewReader(v))
+			if err = decoder.Decode(&repo); err != nil {
 				return err
 			}
-			repos = append(repos, domain.Repository{
-				URL:             string(k),
-				PollingInterval: interval,
-			})
+			repos = append(repos, repo)
 			return nil
 		})
 	})
