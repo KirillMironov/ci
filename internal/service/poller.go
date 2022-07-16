@@ -23,11 +23,12 @@ type Poller struct {
 type (
 	// cloner is a service that can clone a repository.
 	cloner interface {
-		CloneRepository(url string) (sourceCodePath string, removeSourceCode func() error, err error)
+		GetLatestCommitHash(url, branch string) (string, error)
+		CloneRepository(url, branch, hash string) (sourceCodePath string, remove func(), err error)
 	}
 	// archiver is a service that works with archives.
 	archiver interface {
-		Compress(dir string) (archivePath string, removeArchive func() error, err error)
+		Compress(dir string) (archivePath string, remove func(), err error)
 		FindFile(filename, archivePath string) ([]byte, error)
 	}
 	// parser is a service that can parse a pipeline.
@@ -94,25 +95,23 @@ func (p Poller) Start(repo domain.Repository) {
 
 // poll clones a repository and executes a pipeline.
 func (p Poller) poll(repo domain.Repository) error {
-	sourceCodePath, removeSourceCode, err := p.cloner.CloneRepository(repo.URL)
+	hash, err := p.cloner.GetLatestCommitHash(repo.URL, repo.Branch)
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if err = removeSourceCode(); err != nil {
-			p.logger.Error(err)
-		}
-	}()
+	repo.Hash = hash
 
-	archivePath, removeArchive, err := p.archiver.Compress(sourceCodePath)
+	sourceCodePath, remove, err := p.cloner.CloneRepository(repo.URL, repo.Branch, repo.Hash)
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if err = removeArchive(); err != nil {
-			p.logger.Error(err)
-		}
-	}()
+	defer remove()
+
+	archivePath, remove, err := p.archiver.Compress(sourceCodePath)
+	if err != nil {
+		return err
+	}
+	defer remove()
 
 	yaml, err := p.archiver.FindFile(p.ciFilename, archivePath)
 	if err != nil {

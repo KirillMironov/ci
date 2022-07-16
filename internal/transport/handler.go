@@ -29,7 +29,7 @@ func (h Handler) InitRoutes() *gin.Engine {
 	router.Use(gin.Recovery())
 	api := router.Group("/api/v1")
 	{
-		api.POST("/repository", h.addRepository)
+		api.PUT("/repository", h.addRepository)
 	}
 	return router
 }
@@ -38,6 +38,7 @@ func (h Handler) InitRoutes() *gin.Engine {
 func (h Handler) addRepository(c *gin.Context) {
 	var form struct {
 		URL             string `json:"url" binding:"required"`
+		Branch          string `json:"branch" binding:"required"`
 		PollingInterval string `json:"polling_interval" binding:"required"`
 	}
 
@@ -55,6 +56,7 @@ func (h Handler) addRepository(c *gin.Context) {
 
 	go h.poller.Start(domain.Repository{
 		URL:             form.URL,
+		Branch:          form.Branch,
 		PollingInterval: pollingInterval,
 	})
 }

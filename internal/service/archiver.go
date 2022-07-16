@@ -13,7 +13,7 @@ import (
 type Archiver struct{}
 
 // Compress compresses the given directory into a tar archive.
-func (Archiver) Compress(dir string) (archivePath string, removeArchive func() error, err error) {
+func (Archiver) Compress(dir string) (archivePath string, remove func(), err error) {
 	archive, err := os.CreateTemp("", "")
 	if err != nil {
 		return "", nil, err
@@ -56,7 +56,7 @@ func (Archiver) Compress(dir string) (archivePath string, removeArchive func() e
 		return "", nil, err
 	}
 
-	return archive.Name(), func() error { return os.Remove(archive.Name()) }, tw.Close()
+	return archive.Name(), func() { os.Remove(archive.Name()) }, tw.Close()
 }
 
 // FindFile finds file by name in the given tar archive.

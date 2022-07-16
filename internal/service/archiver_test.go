@@ -17,6 +17,6 @@ func TestArchiver(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotEmpty(t, data)
 
-	assert.NoError(t, removeArchive())
+	removeArchive()
 	assert.NoFileExists(t, archivePath)
 }
