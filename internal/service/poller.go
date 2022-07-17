@@ -2,8 +2,8 @@ package service
 
 import (
 	"context"
+	"errors"
 	"github.com/KirillMironov/ci/internal/domain"
-	"github.com/KirillMironov/ci/pkg/logger"
 	"io"
 	"os"
 	"time"
@@ -11,109 +11,73 @@ import (
 
 // Poller is a service that can poll a source code repository.
 type Poller struct {
-	ciFilename   string
-	cloner       cloner
-	archiver     archiver
-	parser       parser
-	executor     executor
-	repositories repositories
-	logger       logger.Logger
+	ciFilename string
+	cloner     cloner
+	executor   executor
+	finder     finder
+	parser     parser
 }
 
 type (
 	// cloner is a service that can clone a repository.
 	cloner interface {
 		GetLatestCommitHash(url, branch string) (string, error)
-		CloneRepository(url, branch, hash string) (sourceCodePath string, remove func(), err error)
+		CloneRepository(url, branch, hash string) (archivePath string, removeArchive func(), err error)
 	}
-	// archiver is a service that works with archives.
-	archiver interface {
-		Compress(dir string) (archivePath string, remove func(), err error)
+	// executor is a service that can execute pipeline steps.
+	executor interface {
+		ExecuteStep(ctx context.Context, step domain.Step, sourceCodeArchive io.Reader) (logs io.ReadCloser, err error)
+	}
+	// finder is a service that can find a file in a given archive.
+	finder interface {
 		FindFile(filename, archivePath string) ([]byte, error)
 	}
 	// parser is a service that can parse a pipeline.
 	parser interface {
 		ParsePipeline(b []byte) (domain.Pipeline, error)
 	}
-	// executor is a service that can execute pipeline steps.
-	executor interface {
-		ExecuteStep(ctx context.Context, step domain.Step, sourceCodeArchive io.Reader) (logs io.ReadCloser, err error)
-	}
-	// repositories stores information about source code repositories.
-	repositories interface {
-		Put(domain.Repository) error
-		GetAll() ([]domain.Repository, error)
-	}
 )
 
 // NewPoller creates a new Poller.
-func NewPoller(ciFilename string, cloner cloner, archiver archiver, parser parser, executor executor,
-	repositories repositories, logger logger.Logger) *Poller {
+func NewPoller(ciFilename string, cloner cloner, executor executor, finder finder, parser parser) *Poller {
 	return &Poller{
-		ciFilename:   ciFilename,
-		cloner:       cloner,
-		archiver:     archiver,
-		parser:       parser,
-		executor:     executor,
-		repositories: repositories,
-		logger:       logger,
+		ciFilename: ciFilename,
+		cloner:     cloner,
+		executor:   executor,
+		finder:     finder,
+		parser:     parser,
 	}
 }
 
-// Recover starts polling saved repositories.
-func (p Poller) Recover() error {
-	repos, err := p.repositories.GetAll()
-	if err != nil {
-		return err
-	}
-
-	for _, repo := range repos {
-		go p.Start(repo)
-	}
-
-	return nil
-}
-
-// Start starts repository polling with a given interval.
-func (p Poller) Start(repo domain.Repository) {
-	err := p.repositories.Put(repo)
-	if err != nil {
-		p.logger.Errorf("failed to put repository %q: %v", repo.URL, err)
-		return
-	}
-
+// Poll starts repository polling with a given interval.
+func (p Poller) Poll(repo domain.Repository, prevHash string) (newHash string, err error) {
 	timer := time.NewTimer(repo.PollingInterval)
 
 	for range timer.C {
-		err := p.poll(repo)
+		newHash, err = p.cloner.GetLatestCommitHash(repo.URL, repo.Branch)
 		if err != nil {
-			p.logger.Error(err)
+			return "", err
 		}
-		timer.Reset(repo.PollingInterval)
+		if newHash == prevHash {
+			timer.Reset(repo.PollingInterval)
+			continue
+		}
+
+		return newHash, p.poll(repo, newHash)
 	}
+
+	return "", errors.New("timer stopped")
 }
 
 // poll clones a repository and executes a pipeline.
-func (p Poller) poll(repo domain.Repository) error {
-	hash, err := p.cloner.GetLatestCommitHash(repo.URL, repo.Branch)
+func (p Poller) poll(repo domain.Repository, hash string) error {
+	archivePath, removeArchive, err := p.cloner.CloneRepository(repo.URL, repo.Branch, hash)
 	if err != nil {
 		return err
 	}
-	repo.Hash = hash
+	defer removeArchive()
 
-	sourceCodePath, remove, err := p.cloner.CloneRepository(repo.URL, repo.Branch, repo.Hash)
-	if err != nil {
-		return err
-	}
-	defer remove()
-
-	archivePath, remove, err := p.archiver.Compress(sourceCodePath)
-	if err != nil {
-		return err
-	}
-	defer remove()
-
-	yaml, err := p.archiver.FindFile(p.ciFilename, archivePath)
+	yaml, err := p.finder.FindFile(p.ciFilename, archivePath)
 	if err != nil {
 		return err
 	}
@@ -123,8 +87,11 @@ func (p Poller) poll(repo domain.Repository) error {
 		return err
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	for _, step := range pipeline.Steps {
-		err = p.executeStep(step, archivePath)
+		err = p.executeStep(ctx, step, archivePath)
 		if err != nil {
 			return err
 		}
@@ -134,14 +101,14 @@ func (p Poller) poll(repo domain.Repository) error {
 }
 
 // executeStep executes a pipeline step.
-func (p Poller) executeStep(step domain.Step, sourceCodeArchivePath string) error {
-	archive, err := os.Open(sourceCodeArchivePath)
+func (p Poller) executeStep(ctx context.Context, step domain.Step, archivePath string) error {
+	archive, err := os.Open(archivePath)
 	if err != nil {
 		return err
 	}
 	defer archive.Close()
 
-	logs, err := p.executor.ExecuteStep(context.Background(), step, archive)
+	logs, err := p.executor.ExecuteStep(ctx, step, archive)
 	if err != nil {
 		return err
 	}

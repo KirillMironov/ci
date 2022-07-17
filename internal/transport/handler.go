@@ -9,17 +9,12 @@ import (
 
 // Handler is a handler for the HTTP requests.
 type Handler struct {
-	poller poller
-}
-
-// poller is a poller for the source code repository.
-type poller interface {
-	Start(domain.Repository)
+	add chan<- domain.Repository
 }
 
 // NewHandler creates a new Handler.
-func NewHandler(poller poller) *Handler {
-	return &Handler{poller: poller}
+func NewHandler(add chan<- domain.Repository) *Handler {
+	return &Handler{add: add}
 }
 
 // InitRoutes initializes the routes.
@@ -34,7 +29,7 @@ func (h Handler) InitRoutes() *gin.Engine {
 	return router
 }
 
-// addRepository starts repository polling with a given interval.
+// addRepository adds a new repository to the scheduler.
 func (h Handler) addRepository(c *gin.Context) {
 	var form struct {
 		URL             string `json:"url" binding:"required"`
@@ -54,9 +49,9 @@ func (h Handler) addRepository(c *gin.Context) {
 		return
 	}
 
-	go h.poller.Start(domain.Repository{
+	h.add <- domain.Repository{
 		URL:             form.URL,
 		Branch:          form.Branch,
 		PollingInterval: pollingInterval,
-	})
+	}
 }

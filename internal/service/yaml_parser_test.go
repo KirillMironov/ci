@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-func TestParser_ParsePipeline(t *testing.T) {
-	var parser Parser
+func TestYAMLParser_ParsePipeline(t *testing.T) {
+	var parser YAMLParser
 	var yaml = `
 name: example
 
@@ -44,4 +44,8 @@ steps:
 			},
 		},
 	}, pipeline)
+
+	pipeline, err = parser.ParsePipeline([]byte("-"))
+	assert.Error(t, err)
+	assert.Empty(t, pipeline)
 }
