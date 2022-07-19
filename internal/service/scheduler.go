@@ -58,6 +58,7 @@ func (s *Scheduler) Start(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			s.logger.Infof("scheduler stopped: %v", ctx.Err())
+			return
 		case repo := <-s.add:
 			s.logger.Infof("starting polling %s", repo.URL)
 			go s.poll(repo)
