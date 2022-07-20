@@ -8,7 +8,9 @@ import (
 )
 
 type Scheduler struct {
-	add          chan domain.Repository
+	add chan domain.Repository
+	// polling used to cancel polling of a repository, if it's already running.
+	polling      map[repoURL]context.CancelFunc
 	once         sync.Once
 	poller       poller
 	repositories repositories
@@ -16,9 +18,11 @@ type Scheduler struct {
 }
 
 type (
+	// repoURL used in polling map to identify a repository.
+	repoURL string
 	// poller is a service that can poll a source code repository.
 	poller interface {
-		Poll(repo domain.Repository, prevHash string) (newHash string, err error)
+		Poll(ctx context.Context, repo domain.Repository, prevHash string) (newHash string, err error)
 	}
 	// repositories stores information about source code repositories.
 	repositories interface {
@@ -32,6 +36,7 @@ func NewScheduler(add chan domain.Repository, poller poller, repositories reposi
 	logger logger.Logger) *Scheduler {
 	return &Scheduler{
 		add:          add,
+		polling:      make(map[repoURL]context.CancelFunc),
 		poller:       poller,
 		repositories: repositories,
 		logger:       logger,
@@ -61,20 +66,25 @@ func (s *Scheduler) Start(ctx context.Context) {
 			return
 		case repo := <-s.add:
 			s.logger.Infof("starting polling %s", repo.URL)
-			go s.poll(repo)
+			if cancel, ok := s.polling[repoURL(repo.URL)]; ok {
+				cancel()
+			}
+			pollCtx, cancel := context.WithCancel(ctx)
+			s.polling[repoURL(repo.URL)] = cancel
+			go s.poll(pollCtx, repo)
 		}
 	}
 }
 
 // poll starts polling a source code repository.
-func (s *Scheduler) poll(repo domain.Repository) {
+func (s *Scheduler) poll(ctx context.Context, repo domain.Repository) {
 	err := s.repositories.Put(repo)
 	if err != nil {
 		s.logger.Errorf("failed to save repository %s: %v", repo.URL, err)
 		return
 	}
 
-	repo.Hash, err = s.poller.Poll(repo, repo.Hash)
+	repo.Hash, err = s.poller.Poll(ctx, repo, repo.Hash)
 	if err != nil {
 		s.logger.Errorf("failed to poll %s: %v", repo.URL, err)
 		return

@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"github.com/KirillMironov/ci/internal/domain"
 	"io"
 	"os"
@@ -50,23 +49,26 @@ func NewPoller(ciFilename string, cloner cloner, executor executor, finder finde
 }
 
 // Poll starts repository polling with a given interval.
-func (p Poller) Poll(repo domain.Repository, prevHash string) (newHash string, err error) {
+func (p Poller) Poll(ctx context.Context, repo domain.Repository, prevHash string) (newHash string, err error) {
 	timer := time.NewTimer(repo.PollingInterval)
 
-	for range timer.C {
-		newHash, err = p.cloner.GetLatestCommitHash(repo.URL, repo.Branch)
-		if err != nil {
-			return "", err
-		}
-		if newHash == prevHash {
-			timer.Reset(repo.PollingInterval)
-			continue
-		}
+	for {
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-timer.C:
+			newHash, err = p.cloner.GetLatestCommitHash(repo.URL, repo.Branch)
+			if err != nil {
+				return "", err
+			}
+			if newHash == prevHash {
+				timer.Reset(repo.PollingInterval)
+				continue
+			}
 
-		return newHash, p.poll(repo, newHash)
+			return newHash, p.poll(repo, newHash)
+		}
 	}
-
-	return "", errors.New("timer stopped")
 }
 
 // poll clones a repository and executes a pipeline.
