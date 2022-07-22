@@ -6,9 +6,9 @@ import (
 	"github.com/KirillMironov/ci/internal/service"
 	"github.com/KirillMironov/ci/internal/storage"
 	"github.com/KirillMironov/ci/internal/transport"
-	"github.com/boltdb/bolt"
 	"github.com/docker/docker/client"
 	"github.com/sirupsen/logrus"
+	"go.etcd.io/bbolt"
 	"time"
 )
 
@@ -35,7 +35,7 @@ func main() {
 	defer cli.Close()
 
 	// BoltDB
-	db, err := bolt.Open(cfg.BoltDBPath, 0600, &bolt.Options{Timeout: time.Second})
+	db, err := bbolt.Open(cfg.BoltDBPath, 0600, &bbolt.Options{Timeout: time.Second})
 	if err != nil {
 		logger.Fatal(err)
 	}

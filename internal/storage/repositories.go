@@ -4,18 +4,18 @@ import (
 	"bytes"
 	"encoding/gob"
 	"github.com/KirillMironov/ci/internal/domain"
-	"github.com/boltdb/bolt"
+	"go.etcd.io/bbolt"
 )
 
 // Repositories is a boltdb-based repositories storage.
 type Repositories struct {
-	db     *bolt.DB
+	db     *bbolt.DB
 	bucket string
 }
 
 // NewRepositories creates a new bucket for repositories with a given name if it doesn't exist.
-func NewRepositories(db *bolt.DB, bucket string) (*Repositories, error) {
-	err := db.Update(func(tx *bolt.Tx) error {
+func NewRepositories(db *bbolt.DB, bucket string) (*Repositories, error) {
+	err := db.Update(func(tx *bbolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists([]byte(bucket))
 		return err
 	})
@@ -33,7 +33,7 @@ func (r Repositories) Put(repo domain.Repository) error {
 		return err
 	}
 
-	return r.db.Update(func(tx *bolt.Tx) error {
+	return r.db.Update(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte(r.bucket))
 		return b.Put([]byte(repo.URL), buf.Bytes())
 	})
@@ -41,7 +41,7 @@ func (r Repositories) Put(repo domain.Repository) error {
 
 // Delete deletes a repository by its URL.
 func (r Repositories) Delete(repoURL domain.RepositoryURL) error {
-	return r.db.Update(func(tx *bolt.Tx) error {
+	return r.db.Update(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte(r.bucket))
 		return b.Delete([]byte(repoURL))
 	})
@@ -49,7 +49,7 @@ func (r Repositories) Delete(repoURL domain.RepositoryURL) error {
 
 // GetAll returns all repositories.
 func (r Repositories) GetAll() (repos []domain.Repository, err error) {
-	err = r.db.View(func(tx *bolt.Tx) error {
+	err = r.db.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte(r.bucket))
 		return b.ForEach(func(k, v []byte) error {
 			var repo domain.Repository

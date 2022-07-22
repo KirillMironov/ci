@@ -3,13 +3,13 @@ module github.com/KirillMironov/ci
 go 1.18
 
 require (
-	github.com/boltdb/bolt v1.3.1
 	github.com/docker/docker v20.10.17+incompatible
 	github.com/gin-gonic/gin v1.8.1
 	github.com/go-git/go-git/v5 v5.4.2
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.8.0
+	go.etcd.io/bbolt v1.3.6
 	gopkg.in/yaml.v2 v2.4.0
 )
 
