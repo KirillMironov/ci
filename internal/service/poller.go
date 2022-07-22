@@ -49,7 +49,7 @@ func NewPoller(ciFilename string, cloner cloner, executor executor, finder finde
 }
 
 // Poll starts repository polling with a given interval.
-func (p Poller) Poll(ctx context.Context, repo domain.Repository, prevHash string) (newHash string, err error) {
+func (p Poller) Poll(ctx context.Context, repo domain.Repository, prevHash string) (latestHash string, err error) {
 	timer := time.NewTimer(repo.PollingInterval)
 
 	for {
@@ -57,22 +57,22 @@ func (p Poller) Poll(ctx context.Context, repo domain.Repository, prevHash strin
 		case <-ctx.Done():
 			return "", ctx.Err()
 		case <-timer.C:
-			newHash, err = p.cloner.GetLatestCommitHash(repo.URL, repo.Branch)
+			latestHash, err = p.cloner.GetLatestCommitHash(repo.URL, repo.Branch)
 			if err != nil {
 				return "", err
 			}
-			if newHash == prevHash {
+			if latestHash == prevHash {
 				timer.Reset(repo.PollingInterval)
 				continue
 			}
 
-			return newHash, p.poll(repo, newHash)
+			return latestHash, p.poll(ctx, repo, latestHash)
 		}
 	}
 }
 
 // poll clones a repository and executes a pipeline.
-func (p Poller) poll(repo domain.Repository, hash string) error {
+func (p Poller) poll(ctx context.Context, repo domain.Repository, hash string) error {
 	archivePath, removeArchive, err := p.cloner.CloneRepository(repo.URL, repo.Branch, hash)
 	if err != nil {
 		return err
@@ -89,7 +89,7 @@ func (p Poller) poll(repo domain.Repository, hash string) error {
 		return err
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	for _, step := range pipeline.Steps {

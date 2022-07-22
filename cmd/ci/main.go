@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"github.com/KirillMironov/ci/config"
-	"github.com/KirillMironov/ci/internal/domain"
 	"github.com/KirillMironov/ci/internal/service"
 	"github.com/KirillMironov/ci/internal/storage"
 	"github.com/KirillMironov/ci/internal/transport"
@@ -54,9 +53,8 @@ func main() {
 		cloner    = service.NewCloner(cfg.RepositoriesDir, archiver)
 		executor  = service.NewDockerExecutor(cli, cfg.ContainerWorkingDir)
 		poller    = service.NewPoller(cfg.CIFilename, cloner, executor, archiver, parser)
-		add       = make(chan domain.Repository)
-		scheduler = service.NewScheduler(add, poller, repositories, logger)
-		handler   = transport.NewHandler(add)
+		scheduler = service.NewScheduler(poller, repositories, logger)
+		handler   = transport.NewHandler(scheduler)
 	)
 
 	ctx, cancel := context.WithCancel(context.Background())

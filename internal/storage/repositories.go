@@ -39,6 +39,14 @@ func (r Repositories) Put(repo domain.Repository) error {
 	})
 }
 
+// Delete deletes a repository by its URL.
+func (r Repositories) Delete(repoURL domain.RepositoryURL) error {
+	return r.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(r.bucket))
+		return b.Delete([]byte(repoURL))
+	})
+}
+
 // GetAll returns all repositories.
 func (r Repositories) GetAll() (repos []domain.Repository, err error) {
 	err = r.db.View(func(tx *bolt.Tx) error {

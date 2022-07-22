@@ -9,3 +9,6 @@ type Repository struct {
 	Branch          string
 	PollingInterval time.Duration
 }
+
+// RepositoryURL used to identify a repository.
+type RepositoryURL string

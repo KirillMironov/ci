@@ -8,9 +8,10 @@ import (
 )
 
 type Scheduler struct {
-	add chan domain.Repository
+	put    chan domain.Repository
+	delete chan domain.RepositoryURL
 	// polling used to cancel polling of a repository, if it's already running.
-	polling      map[repoURL]context.CancelFunc
+	polling      map[domain.RepositoryURL]context.CancelFunc
 	once         sync.Once
 	poller       poller
 	repositories repositories
@@ -18,8 +19,6 @@ type Scheduler struct {
 }
 
 type (
-	// repoURL used in polling map to identify a repository.
-	repoURL string
 	// poller is a service that can poll a source code repository.
 	poller interface {
 		Poll(ctx context.Context, repo domain.Repository, prevHash string) (newHash string, err error)
@@ -27,16 +26,17 @@ type (
 	// repositories stores information about source code repositories.
 	repositories interface {
 		Put(domain.Repository) error
+		Delete(domain.RepositoryURL) error
 		GetAll() ([]domain.Repository, error)
 	}
 )
 
 // NewScheduler creates a new Scheduler.
-func NewScheduler(add chan domain.Repository, poller poller, repositories repositories,
-	logger logger.Logger) *Scheduler {
+func NewScheduler(poller poller, repositories repositories, logger logger.Logger) *Scheduler {
 	return &Scheduler{
-		add:          add,
-		polling:      make(map[repoURL]context.CancelFunc),
+		put:          make(chan domain.Repository),
+		delete:       make(chan domain.RepositoryURL),
+		polling:      make(map[domain.RepositoryURL]context.CancelFunc),
 		poller:       poller,
 		repositories: repositories,
 		logger:       logger,
@@ -54,7 +54,7 @@ func (s *Scheduler) Start(ctx context.Context) {
 			}
 
 			for _, repo := range repos {
-				s.add <- repo
+				s.put <- repo
 			}
 		}()
 	})
@@ -64,16 +64,33 @@ func (s *Scheduler) Start(ctx context.Context) {
 		case <-ctx.Done():
 			s.logger.Infof("scheduler stopped: %v", ctx.Err())
 			return
-		case repo := <-s.add:
+		case repo := <-s.put:
 			s.logger.Infof("starting polling %s", repo.URL)
-			if cancel, ok := s.polling[repoURL(repo.URL)]; ok {
+			if cancel, ok := s.polling[domain.RepositoryURL(repo.URL)]; ok {
 				cancel()
 			}
 			pollCtx, cancel := context.WithCancel(ctx)
-			s.polling[repoURL(repo.URL)] = cancel
+			s.polling[domain.RepositoryURL(repo.URL)] = cancel
 			go s.poll(pollCtx, repo)
+		case repoURL := <-s.delete:
+			s.logger.Infof("removing repository %s", repoURL)
+			if cancel, ok := s.polling[repoURL]; ok {
+				cancel()
+			}
+			err := s.repositories.Delete(repoURL)
+			if err != nil {
+				s.logger.Errorf("failed to remove repository %s: %v", repoURL, err)
+			}
 		}
 	}
+}
+
+func (s *Scheduler) Put(repo domain.Repository) {
+	s.put <- repo
+}
+
+func (s *Scheduler) Delete(repoURL domain.RepositoryURL) {
+	s.delete <- repoURL
 }
 
 // poll starts polling a source code repository.
@@ -90,5 +107,5 @@ func (s *Scheduler) poll(ctx context.Context, repo domain.Repository) {
 		return
 	}
 
-	s.add <- repo
+	s.put <- repo
 }
