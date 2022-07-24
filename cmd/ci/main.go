@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"github.com/KirillMironov/ci/config"
 	"github.com/KirillMironov/ci/internal/service"
 	"github.com/KirillMironov/ci/internal/storage"
@@ -9,6 +10,10 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/sirupsen/logrus"
 	"go.etcd.io/bbolt"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 )
 
@@ -62,17 +67,37 @@ func main() {
 		handler   = transport.NewHandler(scheduler)
 	)
 
+	// Scheduler
 	ctx, cancel := context.WithCancel(context.Background())
 	if err != nil {
 		logger.Fatal(err)
 	}
 	defer cancel()
 
-	// Scheduler
 	go scheduler.Start(ctx)
 
 	// HTTP Server
-	err = handler.InitRoutes().Run(":" + cfg.Port)
+	srv := &http.Server{
+		Addr:    ":" + cfg.Port,
+		Handler: handler.InitRoutes(),
+	}
+
+	go func() {
+		err := srv.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Fatal(err)
+		}
+	}()
+
+	// Graceful Shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	<-quit
+
+	srvCtx, srvCancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer srvCancel()
+
+	err = srv.Shutdown(srvCtx)
 	if err != nil {
 		logger.Fatal(err)
 	}
