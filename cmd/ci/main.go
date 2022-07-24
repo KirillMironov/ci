@@ -47,13 +47,18 @@ func main() {
 		logger.Fatal(err)
 	}
 
+	logs, err := storage.NewLogs(db, "logs")
+	if err != nil {
+		logger.Fatal(err)
+	}
+
 	var (
 		archiver  = &service.TarArchiver{}
 		parser    = &service.YAMLParser{}
 		cloner    = service.NewCloner(cfg.RepositoriesDir, archiver)
 		executor  = service.NewDockerExecutor(cli, cfg.ContainerWorkingDir)
 		poller    = service.NewPoller(cfg.CIFilename, cloner, executor, archiver, parser)
-		scheduler = service.NewScheduler(poller, repositories, logger)
+		scheduler = service.NewScheduler(poller, repositories, logs, logger)
 		handler   = transport.NewHandler(scheduler)
 	)
 

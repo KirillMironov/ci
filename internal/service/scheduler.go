@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"github.com/KirillMironov/ci/internal/domain"
 	"github.com/KirillMironov/ci/pkg/logger"
 	"sync"
@@ -15,30 +16,37 @@ type Scheduler struct {
 	once         sync.Once
 	poller       poller
 	repositories repositories
+	logs         logs
 	logger       logger.Logger
 }
 
 type (
 	// poller is a service that can poll a source code repository.
 	poller interface {
-		Poll(ctx context.Context, repo domain.Repository, prevHash string) (newHash string, err error)
+		Poll(ctx context.Context, repo domain.Repository, prevHash string) (newHash string, logs []byte, err error)
 	}
 	// repositories stores information about source code repositories.
 	repositories interface {
 		Put(domain.Repository) error
 		Delete(domain.RepositoryURL) error
 		GetAll() ([]domain.Repository, error)
+		GetByURL(url string) (domain.Repository, error)
+	}
+	logs interface {
+		Put(log domain.Log) (id int, err error)
+		GetById(id int) (domain.Log, error)
 	}
 )
 
 // NewScheduler creates a new Scheduler.
-func NewScheduler(poller poller, repositories repositories, logger logger.Logger) *Scheduler {
+func NewScheduler(poller poller, repositories repositories, logs logs, logger logger.Logger) *Scheduler {
 	return &Scheduler{
 		put:          make(chan domain.Repository),
 		delete:       make(chan domain.RepositoryURL),
 		polling:      make(map[domain.RepositoryURL]context.CancelFunc),
 		poller:       poller,
 		repositories: repositories,
+		logs:         logs,
 		logger:       logger,
 	}
 }
@@ -95,15 +103,38 @@ func (s *Scheduler) Delete(repoURL domain.RepositoryURL) {
 
 // poll starts polling a source code repository.
 func (s *Scheduler) poll(ctx context.Context, repo domain.Repository) {
-	err := s.repositories.Put(repo)
+	savedRepo, err := s.repositories.GetByURL(repo.URL)
+	if err != nil && !errors.Is(err, domain.ErrRepoNotFound) {
+		s.logger.Errorf("failed to get repository %s: %v", repo.URL, err)
+		return
+	}
+	repo.Builds = savedRepo.Builds
+
+	var prevHash string
+	if repo.Builds != nil {
+		prevHash = repo.Builds[len(repo.Builds)-1].Commit.Hash
+	}
+
+	hash, buildLogs, err := s.poller.Poll(ctx, repo, prevHash)
 	if err != nil {
-		s.logger.Errorf("failed to save repository %s: %v", repo.URL, err)
+		s.logger.Errorf("failed to poll %s: %v", repo.URL, err)
 		return
 	}
 
-	repo.Hash, err = s.poller.Poll(ctx, repo, repo.Hash)
+	logId, err := s.logs.Put(domain.Log{Data: buildLogs})
 	if err != nil {
-		s.logger.Errorf("failed to poll %s: %v", repo.URL, err)
+		s.logger.Errorf("failed to put log: %v", err)
+		return
+	}
+
+	repo.Builds = append(repo.Builds, domain.Build{
+		Commit: domain.Commit{Hash: hash},
+		LogId:  logId,
+	})
+
+	err = s.repositories.Put(repo)
+	if err != nil {
+		s.logger.Errorf("failed to put repository %s: %v", repo.URL, err)
 		return
 	}
 

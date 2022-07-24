@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"github.com/KirillMironov/ci/internal/domain"
 	"io"
@@ -49,73 +50,77 @@ func NewPoller(ciFilename string, cloner cloner, executor executor, finder finde
 }
 
 // Poll starts repository polling with a given interval.
-func (p Poller) Poll(ctx context.Context, repo domain.Repository, prevHash string) (latestHash string, err error) {
+func (p Poller) Poll(ctx context.Context, repo domain.Repository, prevHash string) (latestHash string, logs []byte,
+	err error) {
 	timer := time.NewTimer(repo.PollingInterval)
 
 	for {
 		select {
 		case <-ctx.Done():
-			return "", ctx.Err()
+			return "", nil, ctx.Err()
 		case <-timer.C:
 			latestHash, err = p.cloner.GetLatestCommitHash(repo.URL, repo.Branch)
 			if err != nil {
-				return "", err
+				return "", nil, err
 			}
 			if latestHash == prevHash {
 				timer.Reset(repo.PollingInterval)
 				continue
 			}
 
-			return latestHash, p.poll(ctx, repo, latestHash)
+			logs, err = p.poll(ctx, repo, latestHash)
+			return latestHash, logs, err
 		}
 	}
 }
 
 // poll clones a repository and executes a pipeline.
-func (p Poller) poll(ctx context.Context, repo domain.Repository, hash string) error {
+func (p Poller) poll(ctx context.Context, repo domain.Repository, hash string) ([]byte, error) {
 	archivePath, removeArchive, err := p.cloner.CloneRepository(repo.URL, repo.Branch, hash)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer removeArchive()
 
 	yaml, err := p.finder.FindFile(p.ciFilename, archivePath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	pipeline, err := p.parser.ParsePipeline(yaml)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	var buf bytes.Buffer
+
 	for _, step := range pipeline.Steps {
-		err = p.executeStep(ctx, step, archivePath)
+		log, err := p.executeStep(ctx, step, archivePath)
 		if err != nil {
-			return err
+			return nil, err
 		}
+		buf.Write(log)
 	}
 
-	return nil
+	return buf.Bytes(), nil
 }
 
 // executeStep executes a pipeline step.
-func (p Poller) executeStep(ctx context.Context, step domain.Step, archivePath string) error {
+func (p Poller) executeStep(ctx context.Context, step domain.Step, archivePath string) ([]byte, error) {
 	archive, err := os.Open(archivePath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer archive.Close()
 
-	logs, err := p.executor.ExecuteStep(ctx, step, archive)
+	logsReader, err := p.executor.ExecuteStep(ctx, step, archive)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer logs.Close()
+	defer logsReader.Close()
 
-	_, err = io.Copy(os.Stdout, logs)
-	return err
+	return io.ReadAll(logsReader)
 }

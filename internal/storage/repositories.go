@@ -63,3 +63,16 @@ func (r Repositories) GetAll() (repos []domain.Repository, err error) {
 	})
 	return repos, err
 }
+
+func (r Repositories) GetByURL(url string) (repo domain.Repository, err error) {
+	err = r.db.View(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte(r.bucket))
+		v := b.Get([]byte(url))
+		if v == nil {
+			return domain.ErrRepoNotFound
+		}
+		decoder := gob.NewDecoder(bytes.NewReader(v))
+		return decoder.Decode(&repo)
+	})
+	return repo, err
+}
