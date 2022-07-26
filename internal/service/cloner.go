@@ -9,7 +9,6 @@ import (
 	"hash/fnv"
 	"os"
 	"path/filepath"
-	"sync"
 )
 
 var ErrBranchNotFound = errors.New("branch not found")
@@ -18,7 +17,6 @@ var ErrBranchNotFound = errors.New("branch not found")
 type Cloner struct {
 	reposDir string
 	archiver archiver
-	sync.Mutex
 }
 
 // archiver is a service that can archive a directory.
@@ -35,7 +33,7 @@ func NewCloner(reposDir string, archiver archiver) *Cloner {
 }
 
 // GetLatestCommitHash returns the hash of the latest commit in the given repository branch.
-func (*Cloner) GetLatestCommitHash(url, branch string) (string, error) {
+func (Cloner) GetLatestCommitHash(url, branch string) (string, error) {
 	remote := git.NewRemote(nil, &config.RemoteConfig{Name: "origin", URLs: []string{url}})
 
 	refs, err := remote.List(&git.ListOptions{})
@@ -55,16 +53,13 @@ func (*Cloner) GetLatestCommitHash(url, branch string) (string, error) {
 }
 
 // CloneRepository clones a repository and returns the path to the compressed source code.
-func (c *Cloner) CloneRepository(url, branch, hash string) (archivePath string, removeArchive func(), err error) {
+func (c Cloner) CloneRepository(url, branch, hash string) (archivePath string, removeArchive func(), err error) {
 	abs, err := filepath.Abs(c.reposDir)
 	if err != nil {
 		return "", nil, err
 	}
 
 	repoPath := filepath.Join(abs, hex.EncodeToString(fnv.New32().Sum([]byte(url))))
-
-	c.Lock()
-	defer c.Unlock()
 
 	var repo *git.Repository
 
@@ -93,6 +88,9 @@ func (c *Cloner) CloneRepository(url, branch, hash string) (archivePath string, 
 		ReferenceName: plumbing.NewBranchReferenceName(branch),
 		SingleBranch:  true,
 	})
+	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
+		return "", nil, err
+	}
 
 	err = wt.Checkout(&git.CheckoutOptions{Hash: plumbing.NewHash(hash)})
 	if err != nil {

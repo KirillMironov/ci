@@ -62,12 +62,13 @@ func main() {
 		parser    = &service.YAMLParser{}
 		cloner    = service.NewCloner(cfg.RepositoriesDir, archiver)
 		executor  = service.NewDockerExecutor(cli, cfg.ContainerWorkingDir)
-		poller    = service.NewPoller(cfg.CIFilename, cloner, executor, archiver, parser)
-		scheduler = service.NewScheduler(poller, repositories, logs, logger)
+		runner    = service.NewRunner(cfg.CIFilename, cloner, executor, archiver, parser, logs)
+		poller    = service.NewPoller(cloner, runner, repositories, logger)
+		scheduler = service.NewScheduler(poller, repositories, logger)
 		handler   = transport.NewHandler(scheduler)
 	)
 
-	// Scheduler
+	// Scheduler & Poller
 	ctx, cancel := context.WithCancel(context.Background())
 	if err != nil {
 		logger.Fatal(err)
@@ -75,6 +76,7 @@ func main() {
 	defer cancel()
 
 	go scheduler.Start(ctx)
+	go poller.Start(ctx)
 
 	// HTTP Server
 	srv := &http.Server{

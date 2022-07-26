@@ -1,7 +1,7 @@
 package domain
 
 const (
-	Success = iota
+	Success Status = iota
 	Failure
 	Skipped
 )

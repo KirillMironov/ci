@@ -25,8 +25,8 @@ func NewRepositories(db *bbolt.DB, bucket string) (*Repositories, error) {
 	}, err
 }
 
-// Put adds or updates a repository.
-func (r Repositories) Put(repo domain.Repository) error {
+// Save adds or updates a repository.
+func (r Repositories) Save(repo domain.Repository) error {
 	var buf bytes.Buffer
 	encoder := gob.NewEncoder(&buf)
 	if err := encoder.Encode(repo); err != nil {
