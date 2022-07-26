@@ -19,7 +19,6 @@ type Cloner struct {
 	archiver archiver
 }
 
-// archiver is a service that can archive a directory.
 type archiver interface {
 	Compress(dir string) (archivePath string, err error)
 }

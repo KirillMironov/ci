@@ -62,8 +62,8 @@ func main() {
 		parser    = &service.YAMLParser{}
 		cloner    = service.NewCloner(cfg.RepositoriesDir, archiver)
 		executor  = service.NewDockerExecutor(cli, cfg.ContainerWorkingDir)
-		runner    = service.NewRunner(cfg.CIFilename, cloner, executor, archiver, parser, logs)
-		poller    = service.NewPoller(cloner, runner, repositories, logger)
+		runner    = service.NewRunner(executor)
+		poller    = service.NewPoller(cfg.CIFilename, runner, cloner, archiver, parser, repositories, logs, logger)
 		scheduler = service.NewScheduler(poller, repositories, logger)
 		handler   = transport.NewHandler(scheduler)
 	)

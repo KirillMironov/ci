@@ -46,8 +46,6 @@ func (s *Scheduler) Delete(repoURL domain.RepositoryURL) {
 func (s *Scheduler) Start(ctx context.Context) {
 	s.once.Do(func() {
 		go func() {
-			s.logger.Info("starting saved repositories polling")
-
 			repos, err := s.repositories.GetAll()
 			if err != nil {
 				s.logger.Errorf("failed to get saved repositories: %v", err)

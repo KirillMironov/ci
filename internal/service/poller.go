@@ -11,31 +11,52 @@ import (
 // Poller is a service that can poll a source code repository.
 type Poller struct {
 	poll         chan domain.Repository
-	cloner       cloner
+	ciFilename   string
 	runner       runner
+	cloner       cloner
+	finder       finder
+	parser       parser
 	repositories repositories
+	logs         logs
 	logger       logger.Logger
 }
 
 type (
 	runner interface {
-		Run(ctx context.Context, repo domain.Repository, targetHash string) (logId int, err error)
+		Run(ctx context.Context, pipeline domain.Pipeline, srcCodeArchivePath string) (logs []byte, err error)
 	}
-	// repositories stores information about source code repositories.
+	cloner interface {
+		GetLatestCommitHash(url, branch string) (string, error)
+		CloneRepository(url, branch, hash string) (archivePath string, removeArchive func(), err error)
+	}
+	finder interface {
+		FindFile(filename, archivePath string) ([]byte, error)
+	}
+	parser interface {
+		ParsePipeline(b []byte) (domain.Pipeline, error)
+	}
 	repositories interface {
 		Save(domain.Repository) error
 		Delete(domain.RepositoryURL) error
 		GetAll() ([]domain.Repository, error)
 		GetByURL(url string) (domain.Repository, error)
 	}
+	logs interface {
+		Save(domain.Log) (id int, err error)
+	}
 )
 
-func NewPoller(cloner cloner, runner runner, repositories repositories, logger logger.Logger) *Poller {
+func NewPoller(ciFilename string, runner runner, cloner cloner, finder finder, parser parser, repositories repositories,
+	logs logs, logger logger.Logger) *Poller {
 	return &Poller{
 		poll:         make(chan domain.Repository),
-		cloner:       cloner,
+		ciFilename:   ciFilename,
 		runner:       runner,
+		cloner:       cloner,
+		finder:       finder,
+		parser:       parser,
 		repositories: repositories,
+		logs:         logs,
 		logger:       logger,
 	}
 }
@@ -56,20 +77,9 @@ func (p Poller) Start(ctx context.Context) {
 				continue
 			}
 
-			logId, err := p.runner.Run(ctx, repo, latestHash)
+			err = p.build(ctx, repo, latestHash)
 			if err != nil {
-				p.logger.Errorf("failed to run: %v", err)
-				continue
-			}
-
-			repo.Builds = append(repo.Builds, domain.Build{
-				Commit: domain.Commit{Hash: latestHash},
-				LogId:  logId,
-			})
-
-			err = p.repositories.Save(repo)
-			if err != nil {
-				p.logger.Errorf("failed to save repository: %v", err)
+				p.logger.Errorf("failed to build repository: %q; %v", repo.URL, err)
 			}
 		}
 	}
@@ -95,4 +105,42 @@ func (p Poller) AddRepository(ctx context.Context, repo domain.Repository) {
 			}
 		}
 	}()
+}
+
+func (p Poller) build(ctx context.Context, repo domain.Repository, targetHash string) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	archivePath, removeArchive, err := p.cloner.CloneRepository(repo.URL, repo.Branch, targetHash)
+	if err != nil {
+		return err
+	}
+	defer removeArchive()
+
+	yaml, err := p.finder.FindFile(p.ciFilename, archivePath)
+	if err != nil {
+		return err
+	}
+
+	pipeline, err := p.parser.ParsePipeline(yaml)
+	if err != nil {
+		return err
+	}
+
+	pipelineLogs, err := p.runner.Run(ctx, pipeline, archivePath)
+	if err != nil {
+		return err
+	}
+
+	logId, err := p.logs.Save(domain.Log{Data: pipelineLogs})
+	if err != nil {
+		return err
+	}
+
+	repo.Builds = append(repo.Builds, domain.Build{
+		Commit: domain.Commit{Hash: targetHash},
+		LogId:  logId,
+	})
+
+	return p.repositories.Save(repo)
 }

@@ -25,7 +25,7 @@ func NewLogs(db *bbolt.DB, bucket string) (*Logs, error) {
 	}, err
 }
 
-func (l Logs) Put(log domain.Log) (id int, err error) {
+func (l Logs) Save(log domain.Log) (id int, err error) {
 	var buf bytes.Buffer
 	encoder := gob.NewEncoder(&buf)
 
