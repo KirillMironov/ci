@@ -95,7 +95,7 @@ func (p Poller) AddRepository(ctx context.Context, repo domain.Repository) {
 				return
 			case <-timer.C:
 				savedRepo, err := p.repositories.GetByURL(repo.URL)
-				if err != nil && !errors.Is(err, domain.ErrRepoNotFound) {
+				if err != nil && !errors.Is(err, domain.ErrNotFound) {
 					p.logger.Errorf("failed to get saved repository: %v", err)
 				}
 				repo.Builds = savedRepo.Builds

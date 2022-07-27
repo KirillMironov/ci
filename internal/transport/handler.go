@@ -1,25 +1,36 @@
 package transport
 
 import (
+	"errors"
 	"github.com/KirillMironov/ci/internal/domain"
 	"github.com/gin-gonic/gin"
 	"net/http"
+	"strconv"
 	"time"
 )
 
 // Handler is a handler for the HTTP requests.
 type Handler struct {
-	scheduler scheduler
+	scheduler   scheduler
+	logsStorage logsStorage
 }
 
-type scheduler interface {
-	Put(domain.Repository)
-	Delete(domain.RepositoryURL)
-}
+type (
+	scheduler interface {
+		Put(domain.Repository)
+		Delete(domain.RepositoryURL)
+	}
+	logsStorage interface {
+		GetById(id int) (domain.Log, error)
+	}
+)
 
 // NewHandler creates a new Handler.
-func NewHandler(scheduler scheduler) *Handler {
-	return &Handler{scheduler: scheduler}
+func NewHandler(scheduler scheduler, logsStorage logsStorage) *Handler {
+	return &Handler{
+		scheduler:   scheduler,
+		logsStorage: logsStorage,
+	}
 }
 
 // InitRoutes initializes the routes.
@@ -29,8 +40,15 @@ func (h Handler) InitRoutes() *gin.Engine {
 	router.Use(gin.Recovery())
 	api := router.Group("/api/v1")
 	{
-		api.PUT("/repository", h.putRepository)
-		api.DELETE("/repository", h.deleteRepository)
+		repository := api.Group("/repository")
+		{
+			repository.PUT("", h.putRepository)
+			repository.DELETE("", h.deleteRepository)
+		}
+		log := api.Group("/log")
+		{
+			log.GET("/:id", h.getLogById)
+		}
 	}
 	return router
 }
@@ -75,4 +93,24 @@ func (h Handler) deleteRepository(c *gin.Context) {
 	}
 
 	h.scheduler.Delete(domain.RepositoryURL(form.URL))
+}
+
+func (h Handler) getLogById(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, err.Error())
+		return
+	}
+
+	log, err := h.logsStorage.GetById(id)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			c.JSON(http.StatusNotFound, err.Error())
+			return
+		}
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	c.JSON(http.StatusOK, string(log.Data))
 }

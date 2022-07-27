@@ -2,4 +2,4 @@ package domain
 
 import "errors"
 
-var ErrRepoNotFound = errors.New("repository not found")
+var ErrNotFound = errors.New("not found")

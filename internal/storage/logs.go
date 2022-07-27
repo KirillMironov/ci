@@ -44,6 +44,9 @@ func (l Logs) GetById(id int) (log domain.Log, err error) {
 	err = l.db.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte(l.bucket))
 		v := b.Get(intToByte(id))
+		if v == nil {
+			return domain.ErrNotFound
+		}
 		decoder := gob.NewDecoder(bytes.NewReader(v))
 		return decoder.Decode(&log)
 	})

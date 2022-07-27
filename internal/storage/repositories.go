@@ -69,7 +69,7 @@ func (r Repositories) GetByURL(url string) (repo domain.Repository, err error) {
 		b := tx.Bucket([]byte(r.bucket))
 		v := b.Get([]byte(url))
 		if v == nil {
-			return domain.ErrRepoNotFound
+			return domain.ErrNotFound
 		}
 		decoder := gob.NewDecoder(bytes.NewReader(v))
 		return decoder.Decode(&repo)
