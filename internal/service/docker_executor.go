@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"github.com/KirillMironov/ci/internal/domain"
 	"github.com/docker/docker/api/types"
 	containertypes "github.com/docker/docker/api/types/container"
@@ -29,7 +31,8 @@ func (de DockerExecutor) ExecuteStep(ctx context.Context, step domain.Step, sour
 	config := &containertypes.Config{
 		Image:      step.Image,
 		Env:        step.Environment,
-		Cmd:        step.Command,
+		Entrypoint: step.Command,
+		Cmd:        step.Args,
 		Tty:        true,
 		WorkingDir: de.workingDir,
 	}
@@ -46,25 +49,34 @@ func (de DockerExecutor) ExecuteStep(ctx context.Context, step domain.Step, sour
 
 	err = de.cli.CopyToContainer(ctx, container.ID, de.workingDir, sourceCodeArchive, types.CopyToContainerOptions{})
 	if err != nil {
-		return nil, err
+		return logs, err
 	}
 
 	err = de.cli.ContainerStart(ctx, container.ID, types.ContainerStartOptions{})
 	if err != nil {
-		return nil, err
+		return logs, err
 	}
 
-	statusCh, errCh := de.cli.ContainerWait(ctx, container.ID, containertypes.WaitConditionNotRunning)
-	select {
-	case err = <-errCh:
-		if err != nil {
-			return nil, err
-		}
-	case <-statusCh:
-	}
-
-	return de.cli.ContainerLogs(ctx, container.ID, types.ContainerLogsOptions{
+	logs, err = de.cli.ContainerLogs(ctx, container.ID, types.ContainerLogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	resultCh, errCh := de.cli.ContainerWait(ctx, container.ID, containertypes.WaitConditionNotRunning)
+	select {
+	case err = <-errCh:
+		return logs, err
+	case result := <-resultCh:
+		switch {
+		case result.Error != nil:
+			return logs, errors.New(result.Error.Message)
+		case result.StatusCode != 0:
+			return logs, fmt.Errorf("exit code: %d", result.StatusCode)
+		default:
+			return logs, nil
+		}
+	}
 }
