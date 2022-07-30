@@ -37,7 +37,7 @@ func NewHandler(scheduler scheduler, logsStorage logsStorage) *Handler {
 func (h Handler) InitRoutes() *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
-	router.Use(gin.Recovery())
+	router.Use(gin.Recovery(), h.corsMiddleware)
 	api := router.Group("/api/v1")
 	{
 		repositories := api.Group("/repositories")
