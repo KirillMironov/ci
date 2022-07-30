@@ -40,14 +40,14 @@ func (h Handler) InitRoutes() *gin.Engine {
 	router.Use(gin.Recovery())
 	api := router.Group("/api/v1")
 	{
-		repository := api.Group("/repository")
+		repositories := api.Group("/repositories")
 		{
-			repository.PUT("", h.putRepository)
-			repository.DELETE("", h.deleteRepository)
+			repositories.PUT("", h.putRepository)
+			repositories.DELETE("", h.deleteRepository)
 		}
-		log := api.Group("/log")
+		logs := api.Group("/logs")
 		{
-			log.GET("/:id", h.getLogById)
+			logs.GET("/:id", h.getLogById)
 		}
 	}
 	return router
