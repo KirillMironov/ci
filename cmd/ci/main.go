@@ -65,7 +65,7 @@ func main() {
 		runner    = service.NewRunner(executor)
 		poller    = service.NewPoller(cfg.CIFilename, runner, cloner, archiver, parser, repositories, logs, logger)
 		scheduler = service.NewScheduler(poller, repositories, logger)
-		handler   = transport.NewHandler(scheduler, logs)
+		handler   = transport.NewHandler(scheduler, logs, repositories)
 	)
 
 	// Scheduler & Poller

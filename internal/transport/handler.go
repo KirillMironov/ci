@@ -11,8 +11,9 @@ import (
 
 // Handler is a handler for the HTTP requests.
 type Handler struct {
-	scheduler   scheduler
-	logsStorage logsStorage
+	scheduler           scheduler
+	logsStorage         logsStorage
+	repositoriesStorage repositoriesStorage
 }
 
 type (
@@ -23,13 +24,17 @@ type (
 	logsStorage interface {
 		GetById(id int) (domain.Log, error)
 	}
+	repositoriesStorage interface {
+		GetAll() ([]domain.Repository, error)
+	}
 )
 
 // NewHandler creates a new Handler.
-func NewHandler(scheduler scheduler, logsStorage logsStorage) *Handler {
+func NewHandler(scheduler scheduler, ls logsStorage, rs repositoriesStorage) *Handler {
 	return &Handler{
-		scheduler:   scheduler,
-		logsStorage: logsStorage,
+		scheduler:           scheduler,
+		logsStorage:         ls,
+		repositoriesStorage: rs,
 	}
 }
 
@@ -44,6 +49,7 @@ func (h Handler) InitRoutes() *gin.Engine {
 		{
 			repositories.PUT("", h.putRepository)
 			repositories.DELETE("", h.deleteRepository)
+			repositories.GET("", h.getRepositories)
 		}
 		logs := api.Group("/logs")
 		{
@@ -53,7 +59,6 @@ func (h Handler) InitRoutes() *gin.Engine {
 	return router
 }
 
-// putRepository puts a new repository to the scheduler.
 func (h Handler) putRepository(c *gin.Context) {
 	var form struct {
 		URL             string `json:"url" binding:"required"`
@@ -80,7 +85,6 @@ func (h Handler) putRepository(c *gin.Context) {
 	})
 }
 
-// deleteRepository deletes a repository from the scheduler.
 func (h Handler) deleteRepository(c *gin.Context) {
 	var form struct {
 		URL string `json:"url" binding:"required"`
@@ -93,6 +97,32 @@ func (h Handler) deleteRepository(c *gin.Context) {
 	}
 
 	h.scheduler.Delete(domain.RepositoryURL(form.URL))
+}
+
+func (h Handler) getRepositories(c *gin.Context) {
+	type Repository struct {
+		URL          string `json:"url"`
+		LatestCommit string `json:"latest_commit"`
+	}
+
+	var response struct {
+		Repositories []Repository `json:"repositories"`
+	}
+
+	repositories, err := h.repositoriesStorage.GetAll()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	for _, repo := range repositories {
+		response.Repositories = append(response.Repositories, Repository{
+			URL:          repo.URL,
+			LatestCommit: repo.Builds[len(repo.Builds)-1].Commit.Hash,
+		})
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 func (h Handler) getLogById(c *gin.Context) {
