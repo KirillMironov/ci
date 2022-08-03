@@ -116,10 +116,11 @@ func (h Handler) getRepositories(c *gin.Context) {
 	}
 
 	for _, repo := range repositories {
-		response.Repositories = append(response.Repositories, Repository{
-			URL:          repo.URL,
-			LatestCommit: repo.Builds[len(repo.Builds)-1].Commit.Hash,
-		})
+		var r = Repository{URL: repo.URL}
+		if len(repo.Builds) > 0 {
+			r.LatestCommit = repo.Builds[len(repo.Builds)-1].Commit.Hash
+		}
+		response.Repositories = append(response.Repositories, r)
 	}
 
 	c.JSON(http.StatusOK, response)

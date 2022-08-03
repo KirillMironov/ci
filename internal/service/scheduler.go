@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"github.com/KirillMironov/ci/internal/domain"
 	"github.com/KirillMironov/ci/pkg/logger"
 	"sync"
@@ -65,6 +66,14 @@ func (s *Scheduler) Start(ctx context.Context) {
 			return
 		case repo := <-s.put:
 			s.cancelPolling(domain.RepositoryURL(repo.URL))
+
+			_, err := s.repositories.GetByURL(repo.URL)
+			if errors.Is(err, domain.ErrNotFound) {
+				err = s.repositories.Save(repo)
+				if err != nil {
+					s.logger.Errorf("failed to save repository on first put request: %v", err)
+				}
+			}
 
 			pollCtx, cancel := context.WithCancel(ctx)
 			s.polling[domain.RepositoryURL(repo.URL)] = cancel
