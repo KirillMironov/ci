@@ -37,10 +37,12 @@ func (de DockerExecutor) ExecuteStep(ctx context.Context, step domain.Step, sour
 		WorkingDir: de.workingDir,
 	}
 
-	_, err = de.cli.ImagePull(ctx, config.Image, types.ImagePullOptions{})
+	pullLogs, err := de.cli.ImagePull(ctx, config.Image, types.ImagePullOptions{})
 	if err != nil {
 		return nil, err
 	}
+	defer pullLogs.Close()
+	_, _ = io.Copy(io.Discard, pullLogs)
 
 	container, err := de.cli.ContainerCreate(ctx, config, nil, nil, nil, "")
 	if err != nil {
