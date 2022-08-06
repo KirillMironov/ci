@@ -26,8 +26,8 @@ type (
 		Run(ctx context.Context, pipeline domain.Pipeline, srcCodeArchivePath string) (logs []byte, err error)
 	}
 	cloner interface {
-		GetLatestCommitHash(url, branch string) (string, error)
-		CloneRepository(url, branch, hash string) (archivePath string, removeArchive func(), err error)
+		GetLatestCommitHash(domain.Repository) (string, error)
+		CloneRepository(domain.Repository, string) (archivePath string, removeArchive func(), err error)
 	}
 	finder interface {
 		FindFile(filename, archivePath string) ([]byte, error)
@@ -68,7 +68,7 @@ func (p Poller) Start(ctx context.Context) {
 			p.logger.Infof("poller stopped: %v", ctx.Err())
 			return
 		case repo := <-p.poll:
-			latestHash, err := p.cloner.GetLatestCommitHash(repo.URL, repo.Branch)
+			latestHash, err := p.cloner.GetLatestCommitHash(repo)
 			if err != nil {
 				p.logger.Errorf("failed to get latest commit hash: %v", err)
 				continue
@@ -111,7 +111,7 @@ func (p Poller) build(ctx context.Context, repo domain.Repository, targetHash st
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	archivePath, removeArchive, err := p.cloner.CloneRepository(repo.URL, repo.Branch, targetHash)
+	archivePath, removeArchive, err := p.cloner.CloneRepository(repo, targetHash)
 	if err != nil {
 		return err
 	}

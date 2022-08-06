@@ -1,12 +1,11 @@
 package service
 
 import (
-	"encoding/hex"
 	"errors"
+	"github.com/KirillMironov/ci/internal/domain"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
-	"hash/fnv"
 	"os"
 	"path/filepath"
 )
@@ -32,15 +31,15 @@ func NewCloner(reposDir string, archiver archiver) *Cloner {
 }
 
 // GetLatestCommitHash returns the hash of the latest commit in the given repository branch.
-func (Cloner) GetLatestCommitHash(url, branch string) (string, error) {
-	remote := git.NewRemote(nil, &config.RemoteConfig{Name: "origin", URLs: []string{url}})
+func (Cloner) GetLatestCommitHash(repo domain.Repository) (string, error) {
+	remote := git.NewRemote(nil, &config.RemoteConfig{Name: "origin", URLs: []string{repo.URL}})
 
 	refs, err := remote.List(&git.ListOptions{})
 	if err != nil {
 		return "", err
 	}
 
-	target := "refs/heads/" + branch
+	target := "refs/heads/" + repo.Branch
 
 	for _, ref := range refs {
 		if ref.Name().String() == target {
@@ -52,23 +51,24 @@ func (Cloner) GetLatestCommitHash(url, branch string) (string, error) {
 }
 
 // CloneRepository clones a repository and returns the path to the compressed source code.
-func (c Cloner) CloneRepository(url, branch, hash string) (archivePath string, removeArchive func(), err error) {
+func (c Cloner) CloneRepository(repo domain.Repository, hash string) (archivePath string, removeArchive func(),
+	err error) {
 	abs, err := filepath.Abs(c.reposDir)
 	if err != nil {
 		return "", nil, err
 	}
 
-	repoPath := filepath.Join(abs, hex.EncodeToString(fnv.New32().Sum([]byte(url))))
+	localPath := filepath.Join(abs, repo.Id)
 
-	var repo *git.Repository
+	var repository *git.Repository
 
-	repo, err = git.PlainOpen(repoPath)
+	repository, err = git.PlainOpen(localPath)
 	if err != nil {
 		if errors.Is(err, git.ErrRepositoryNotExists) {
-			repo, err = git.PlainClone(repoPath, false, &git.CloneOptions{
-				URL:           url,
+			repository, err = git.PlainClone(localPath, false, &git.CloneOptions{
+				URL:           repo.URL,
 				SingleBranch:  true,
-				ReferenceName: plumbing.NewBranchReferenceName(branch),
+				ReferenceName: plumbing.NewBranchReferenceName(repo.Branch),
 			})
 			if err != nil {
 				return "", nil, err
@@ -78,13 +78,13 @@ func (c Cloner) CloneRepository(url, branch, hash string) (archivePath string, r
 		}
 	}
 
-	wt, err := repo.Worktree()
+	wt, err := repository.Worktree()
 	if err != nil {
 		return "", nil, err
 	}
 
 	err = wt.Pull(&git.PullOptions{
-		ReferenceName: plumbing.NewBranchReferenceName(branch),
+		ReferenceName: plumbing.NewBranchReferenceName(repo.Branch),
 		SingleBranch:  true,
 	})
 	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
@@ -96,7 +96,7 @@ func (c Cloner) CloneRepository(url, branch, hash string) (archivePath string, r
 		return "", nil, err
 	}
 
-	archivePath, err = c.archiver.Compress(repoPath)
+	archivePath, err = c.archiver.Compress(localPath)
 	if err != nil {
 		return "", nil, err
 	}

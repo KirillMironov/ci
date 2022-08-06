@@ -4,6 +4,7 @@ import "time"
 
 // Repository represents a source code repository.
 type Repository struct {
+	Id              string
 	URL             string
 	Branch          string
 	PollingInterval time.Duration

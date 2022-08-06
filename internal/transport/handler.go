@@ -101,6 +101,7 @@ func (h Handler) deleteRepository(c *gin.Context) {
 
 func (h Handler) getRepositories(c *gin.Context) {
 	type Repository struct {
+		Id           string `json:"id"`
 		URL          string `json:"url"`
 		LatestCommit string `json:"latest_commit"`
 	}
@@ -116,7 +117,10 @@ func (h Handler) getRepositories(c *gin.Context) {
 	}
 
 	for _, repo := range repositories {
-		var r = Repository{URL: repo.URL}
+		var r = Repository{
+			Id:  repo.Id,
+			URL: repo.URL,
+		}
 		if len(repo.Builds) > 0 {
 			r.LatestCommit = repo.Builds[len(repo.Builds)-1].Commit.Hash
 		}

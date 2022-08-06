@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"errors"
 	"github.com/KirillMironov/ci/internal/domain"
 	"github.com/KirillMironov/ci/pkg/logger"
@@ -69,6 +71,7 @@ func (s *Scheduler) Start(ctx context.Context) {
 
 			_, err := s.repositories.GetByURL(repo.URL)
 			if errors.Is(err, domain.ErrNotFound) {
+				repo.Id = generateIdFromURL(repo.URL)
 				err = s.repositories.Save(repo)
 				if err != nil {
 					s.logger.Errorf("failed to save repository on first put request: %v", err)
@@ -95,4 +98,10 @@ func (s *Scheduler) cancelPolling(repoURL domain.RepositoryURL) {
 		cancel()
 		delete(s.polling, repoURL)
 	}
+}
+
+func generateIdFromURL(url string) string {
+	h := sha1.New()
+	h.Write([]byte(url))
+	return hex.EncodeToString(h.Sum(nil))
 }
