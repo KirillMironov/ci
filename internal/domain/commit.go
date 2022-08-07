@@ -1,5 +1,5 @@
 package domain
 
 type Commit struct {
-	Hash string
+	Hash string `json:"hash"`
 }
