@@ -76,3 +76,23 @@ func (r Repositories) GetByURL(url string) (repo domain.Repository, err error) {
 	})
 	return repo, err
 }
+
+func (r Repositories) GetById(id string) (repo domain.Repository, err error) {
+	err = r.db.View(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte(r.bucket))
+		c := b.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			var tempRepo domain.Repository
+			decoder := gob.NewDecoder(bytes.NewReader(v))
+			if err = decoder.Decode(&tempRepo); err != nil {
+				return err
+			}
+			if tempRepo.Id == id {
+				repo = tempRepo
+				return nil
+			}
+		}
+		return domain.ErrNotFound
+	})
+	return repo, err
+}

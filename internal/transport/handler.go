@@ -3,10 +3,10 @@ package transport
 import (
 	"errors"
 	"github.com/KirillMironov/ci/internal/domain"
+	"github.com/KirillMironov/ci/pkg/duration"
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"strconv"
-	"time"
 )
 
 // Handler is a handler for the HTTP requests.
@@ -26,6 +26,7 @@ type (
 	}
 	repositoriesStorage interface {
 		GetAll() ([]domain.Repository, error)
+		GetById(id string) (domain.Repository, error)
 	}
 )
 
@@ -50,6 +51,7 @@ func (h Handler) InitRoutes() *gin.Engine {
 			repositories.PUT("", h.putRepository)
 			repositories.DELETE("", h.deleteRepository)
 			repositories.GET("", h.getRepositories)
+			repositories.GET("/:id", h.getRepositoryById)
 		}
 		logs := api.Group("/logs")
 		{
@@ -61,9 +63,9 @@ func (h Handler) InitRoutes() *gin.Engine {
 
 func (h Handler) putRepository(c *gin.Context) {
 	var form struct {
-		URL             string `json:"url" binding:"required"`
-		Branch          string `json:"branch" binding:"required"`
-		PollingInterval string `json:"polling_interval" binding:"required"`
+		URL             string            `json:"url" binding:"required"`
+		Branch          string            `json:"branch" binding:"required"`
+		PollingInterval duration.Duration `json:"polling_interval" binding:"required"`
 	}
 
 	err := c.BindJSON(&form)
@@ -72,16 +74,10 @@ func (h Handler) putRepository(c *gin.Context) {
 		return
 	}
 
-	pollingInterval, err := time.ParseDuration(form.PollingInterval)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, err.Error())
-		return
-	}
-
 	h.scheduler.Put(domain.Repository{
 		URL:             form.URL,
 		Branch:          form.Branch,
-		PollingInterval: pollingInterval,
+		PollingInterval: form.PollingInterval,
 	})
 }
 
@@ -128,6 +124,20 @@ func (h Handler) getRepositories(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+func (h Handler) getRepositoryById(c *gin.Context) {
+	repo, err := h.repositoriesStorage.GetById(c.Param("id"))
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			c.JSON(http.StatusNotFound, err.Error())
+			return
+		}
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	c.JSON(http.StatusOK, repo)
 }
 
 func (h Handler) getLogById(c *gin.Context) {

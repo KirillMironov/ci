@@ -87,7 +87,7 @@ func (p Poller) Start(ctx context.Context) {
 
 func (p Poller) AddRepository(ctx context.Context, repo domain.Repository) {
 	go func() {
-		timer := time.NewTimer(repo.PollingInterval)
+		timer := time.NewTimer(repo.PollingInterval.Duration())
 
 		for {
 			select {
@@ -101,7 +101,7 @@ func (p Poller) AddRepository(ctx context.Context, repo domain.Repository) {
 				repo.Builds = savedRepo.Builds
 
 				p.poll <- repo
-				timer.Reset(repo.PollingInterval)
+				timer.Reset(repo.PollingInterval.Duration())
 			}
 		}
 	}()
