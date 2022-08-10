@@ -47,25 +47,28 @@ func main() {
 	defer db.Close()
 
 	// App
-	repositories, err := storage.NewRepositories(db, "repositories")
+	repositoriesStorage, err := storage.NewRepositories(db, "repositories")
 	if err != nil {
 		logger.Fatal(err)
 	}
 
-	logs, err := storage.NewLogs(db, "logs")
+	logsStorage, err := storage.NewLogs(db, "logs")
 	if err != nil {
 		logger.Fatal(err)
 	}
 
 	var (
-		archiver  = &service.TarArchiver{}
-		parser    = &service.YAMLParser{}
-		cloner    = service.NewCloner(cfg.RepositoriesDir, archiver)
-		executor  = service.NewDockerExecutor(cli, cfg.ContainerWorkingDir)
-		runner    = service.NewRunner(executor)
-		poller    = service.NewPoller(cfg.CIFilename, runner, cloner, archiver, parser, repositories, logs, logger)
-		scheduler = service.NewScheduler(poller, repositories, logger)
-		handler   = transport.NewHandler(scheduler, logs, repositories)
+		repositoriesService = service.NewRepositories(repositoriesStorage)
+		logsService         = service.NewLogs(logsStorage)
+		archiver            = &service.TarArchiver{}
+		parser              = &service.YAMLParser{}
+		cloner              = service.NewCloner(cfg.RepositoriesDir, archiver)
+		executor            = service.NewDockerExecutor(cli, cfg.ContainerWorkingDir)
+		runner              = service.NewRunner(executor)
+		poller              = service.NewPoller(cfg.CIFilename, runner, cloner, archiver, parser, repositoriesService,
+			logsService, logger)
+		scheduler = service.NewScheduler(poller, repositoriesService, logger)
+		handler   = transport.NewHandler(scheduler, repositoriesService, logsService)
 	)
 
 	// Scheduler & Poller
@@ -81,7 +84,7 @@ func main() {
 	// HTTP Server
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,
-		Handler: handler.InitRoutes(),
+		Handler: handler.Routes(),
 	}
 
 	go func() {

@@ -11,9 +11,10 @@ import (
 	"io"
 )
 
-// DockerExecutor is a service that can execute a step in a docker container.
+// DockerExecutor used to execute a step in a container.
 type DockerExecutor struct {
-	cli        *client.Client
+	cli *client.Client
+	// Container working directory.
 	workingDir string
 }
 
@@ -25,7 +26,7 @@ func NewDockerExecutor(cli *client.Client, workingDir string) *DockerExecutor {
 	}
 }
 
-// ExecuteStep executes a step in a container.
+// ExecuteStep copies the source code to the container, executes the step and returns container logs.
 func (de DockerExecutor) ExecuteStep(ctx context.Context, step domain.Step, sourceCodeArchive io.Reader) (
 	logs io.ReadCloser, err error) {
 	config := &containertypes.Config{

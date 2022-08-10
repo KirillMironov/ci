@@ -2,38 +2,35 @@ package service
 
 import (
 	"context"
-	"crypto/sha1"
-	"encoding/hex"
-	"errors"
 	"github.com/KirillMironov/ci/internal/domain"
 	"github.com/KirillMironov/ci/pkg/logger"
 	"sync"
 )
 
+// Scheduler used to schedule repositories polling.
 type Scheduler struct {
 	put    chan domain.Repository
-	delete chan domain.RepositoryURL
-	// polling used to cancel polling of a repository, if it's already running.
-	polling      map[domain.RepositoryURL]context.CancelFunc
-	once         sync.Once
-	poller       poller
-	repositories repositories
-	logger       logger.Logger
+	delete chan string
+	// activePolling used to cancel a repository polling if it's already running.
+	activePolling       map[string]context.CancelFunc
+	once                sync.Once
+	poller              poller
+	repositoriesService domain.RepositoriesService
+	logger              logger.Logger
 }
 
 type poller interface {
 	AddRepository(context.Context, domain.Repository)
 }
 
-// NewScheduler creates a new Scheduler.
-func NewScheduler(poller poller, repositories repositories, logger logger.Logger) *Scheduler {
+func NewScheduler(poller poller, repositoriesService domain.RepositoriesService, logger logger.Logger) *Scheduler {
 	return &Scheduler{
-		put:          make(chan domain.Repository),
-		delete:       make(chan domain.RepositoryURL),
-		polling:      make(map[domain.RepositoryURL]context.CancelFunc),
-		poller:       poller,
-		repositories: repositories,
-		logger:       logger,
+		put:                 make(chan domain.Repository),
+		delete:              make(chan string),
+		activePolling:       make(map[string]context.CancelFunc),
+		poller:              poller,
+		repositoriesService: repositoriesService,
+		logger:              logger,
 	}
 }
 
@@ -41,17 +38,17 @@ func (s *Scheduler) Put(repo domain.Repository) {
 	s.put <- repo
 }
 
-func (s *Scheduler) Delete(repoURL domain.RepositoryURL) {
-	s.delete <- repoURL
+func (s *Scheduler) Delete(id string) {
+	s.delete <- id
 }
 
-// Start listens for new repositories.
+// Start listens for repositories additions and deletions and starts polling.
 func (s *Scheduler) Start(ctx context.Context) {
 	s.once.Do(func() {
 		go func() {
-			repos, err := s.repositories.GetAll()
+			repos, err := s.repositoriesService.GetAll()
 			if err != nil {
-				s.logger.Errorf("failed to get saved repositories: %v", err)
+				s.logger.Errorf("failed to get all saved repositories: %v", err)
 				return
 			}
 
@@ -67,25 +64,21 @@ func (s *Scheduler) Start(ctx context.Context) {
 			s.logger.Infof("scheduler stopped: %v", ctx.Err())
 			return
 		case repo := <-s.put:
-			s.cancelPolling(domain.RepositoryURL(repo.URL))
+			s.cancelPolling(repo.Id)
 
-			_, err := s.repositories.GetByURL(repo.URL)
-			if errors.Is(err, domain.ErrNotFound) {
-				repo.Id = generateIdFromURL(repo.URL)
-				err = s.repositories.Save(repo)
-				if err != nil {
-					s.logger.Errorf("failed to save repository on first put request: %v", err)
-				}
+			repo, err := s.repositoriesService.GetOrCreate(repo)
+			if err != nil {
+				s.logger.Errorf("failed to create repository: %v", err)
+				continue
 			}
 
 			pollCtx, cancel := context.WithCancel(ctx)
-			s.polling[domain.RepositoryURL(repo.URL)] = cancel
-
+			s.activePolling[repo.Id] = cancel
 			s.poller.AddRepository(pollCtx, repo)
 		case repoURL := <-s.delete:
 			s.cancelPolling(repoURL)
 
-			err := s.repositories.Delete(repoURL)
+			err := s.repositoriesService.Delete(repoURL)
 			if err != nil {
 				s.logger.Errorf("failed to delete repository %s: %v", repoURL, err)
 			}
@@ -93,15 +86,9 @@ func (s *Scheduler) Start(ctx context.Context) {
 	}
 }
 
-func (s *Scheduler) cancelPolling(repoURL domain.RepositoryURL) {
-	if cancel, ok := s.polling[repoURL]; ok {
+func (s *Scheduler) cancelPolling(id string) {
+	if cancel, ok := s.activePolling[id]; ok {
 		cancel()
-		delete(s.polling, repoURL)
+		delete(s.activePolling, id)
 	}
-}
-
-func generateIdFromURL(url string) string {
-	h := sha1.New()
-	h.Write([]byte(url))
-	return hex.EncodeToString(h.Sum(nil))
 }

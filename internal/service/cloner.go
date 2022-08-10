@@ -12,21 +12,20 @@ import (
 
 var ErrBranchNotFound = errors.New("branch not found")
 
-// Cloner is a service that can clone a repository.
+// Cloner used to clone source code repositories.
 type Cloner struct {
-	reposDir string
-	archiver archiver
+	repositoriesDir string // Path to the directory where repositories are stored.
+	archiver        archiver
 }
 
 type archiver interface {
 	Compress(dir string) (archivePath string, err error)
 }
 
-// NewCloner creates a new Cloner.
-func NewCloner(reposDir string, archiver archiver) *Cloner {
+func NewCloner(repositoriesDir string, archiver archiver) *Cloner {
 	return &Cloner{
-		reposDir: reposDir,
-		archiver: archiver,
+		repositoriesDir: repositoriesDir,
+		archiver:        archiver,
 	}
 }
 
@@ -50,10 +49,10 @@ func (Cloner) GetLatestCommitHash(repo domain.Repository) (string, error) {
 	return "", ErrBranchNotFound
 }
 
-// CloneRepository clones a repository and returns the path to the compressed source code.
+// CloneRepository clones a repository and returns the path to the compressed source code archive.
 func (c Cloner) CloneRepository(repo domain.Repository, hash string) (archivePath string, removeArchive func(),
 	err error) {
-	abs, err := filepath.Abs(c.reposDir)
+	abs, err := filepath.Abs(c.repositoriesDir)
 	if err != nil {
 		return "", nil, err
 	}

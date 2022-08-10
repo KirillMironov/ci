@@ -8,6 +8,7 @@ import (
 	"os"
 )
 
+// Runner used to execute pipeline steps.
 type Runner struct {
 	executor executor
 }

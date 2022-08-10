@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// TarArchiver is a service that works with tar archives.
+// TarArchiver used to work with tar archives.
 type TarArchiver struct{}
 
 // Compress compresses the given directory into a tar archive.
@@ -59,7 +59,7 @@ func (TarArchiver) Compress(dir string) (archivePath string, err error) {
 	return archive.Name(), tw.Close()
 }
 
-// FindFile finds file in the given tar archive.
+// FindFile finds a file in the given tar archive.
 func (TarArchiver) FindFile(filename, archivePath string) ([]byte, error) {
 	archive, err := os.Open(archivePath)
 	if err != nil {

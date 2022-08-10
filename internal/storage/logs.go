@@ -8,12 +8,13 @@ import (
 	"go.etcd.io/bbolt"
 )
 
-// Logs used to store domain.Log in boltdb.
+// Logs used to store domain.Log in a boltdb bucket.
 type Logs struct {
 	db     *bbolt.DB
 	bucket string
 }
 
+// NewLogs creates a new bucket for logs with a given name if it doesn't exist.
 func NewLogs(db *bbolt.DB, bucket string) (*Logs, error) {
 	err := db.Update(func(tx *bbolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists([]byte(bucket))
@@ -25,7 +26,7 @@ func NewLogs(db *bbolt.DB, bucket string) (*Logs, error) {
 	}, err
 }
 
-func (l Logs) Save(log domain.Log) (id int, err error) {
+func (l Logs) Create(log domain.Log) (id int, err error) {
 	var buf bytes.Buffer
 	encoder := gob.NewEncoder(&buf)
 
@@ -36,14 +37,14 @@ func (l Logs) Save(log domain.Log) (id int, err error) {
 		if err = encoder.Encode(log); err != nil {
 			return err
 		}
-		return b.Put(intToByte(log.Id), buf.Bytes())
+		return b.Put(intToBytes(log.Id), buf.Bytes())
 	})
 }
 
 func (l Logs) GetById(id int) (log domain.Log, err error) {
 	err = l.db.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte(l.bucket))
-		v := b.Get(intToByte(id))
+		v := b.Get(intToBytes(id))
 		if v == nil {
 			return domain.ErrNotFound
 		}
@@ -53,7 +54,7 @@ func (l Logs) GetById(id int) (log domain.Log, err error) {
 	return log, err
 }
 
-func intToByte(v int) []byte {
+func intToBytes(v int) []byte {
 	b := make([]byte, 8)
 	binary.BigEndian.PutUint64(b, uint64(v))
 	return b

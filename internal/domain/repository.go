@@ -2,7 +2,6 @@ package domain
 
 import "github.com/KirillMironov/ci/pkg/duration"
 
-// Repository represents a source code repository.
 type Repository struct {
 	Id              string            `json:"id"`
 	URL             string            `json:"url"`
@@ -11,5 +10,10 @@ type Repository struct {
 	Builds          []Build           `json:"builds"`
 }
 
-// RepositoryURL used to identify a repository.
-type RepositoryURL string
+type RepositoriesService interface {
+	GetOrCreate(Repository) (Repository, error)
+	Update(Repository) error
+	Delete(id string) error
+	GetAll() ([]Repository, error)
+	GetBuilds(id string) ([]Build, error)
+}

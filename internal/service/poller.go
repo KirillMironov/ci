@@ -8,17 +8,17 @@ import (
 	"time"
 )
 
-// Poller is a service that can poll a source code repository.
+// Poller used to poll repositories and run builds.
 type Poller struct {
-	poll         chan domain.Repository
-	ciFilename   string
-	runner       runner
-	cloner       cloner
-	finder       finder
-	parser       parser
-	repositories repositories
-	logs         logs
-	logger       logger.Logger
+	poll                chan domain.Repository
+	ciFilename          string
+	runner              runner
+	cloner              cloner
+	finder              finder
+	parser              parser
+	repositoriesService domain.RepositoriesService
+	logsService         logsService
+	logger              logger.Logger
 }
 
 type (
@@ -35,32 +35,27 @@ type (
 	parser interface {
 		ParsePipeline(b []byte) (domain.Pipeline, error)
 	}
-	repositories interface {
-		Save(domain.Repository) error
-		Delete(domain.RepositoryURL) error
-		GetAll() ([]domain.Repository, error)
-		GetByURL(url string) (domain.Repository, error)
-	}
-	logs interface {
-		Save(domain.Log) (id int, err error)
+	logsService interface {
+		Create(domain.Log) (id int, err error)
 	}
 )
 
-func NewPoller(ciFilename string, runner runner, cloner cloner, finder finder, parser parser, repositories repositories,
-	logs logs, logger logger.Logger) *Poller {
+func NewPoller(ciFilename string, runner runner, cloner cloner, finder finder, parser parser,
+	repositoriesService domain.RepositoriesService, logsService logsService, logger logger.Logger) *Poller {
 	return &Poller{
-		poll:         make(chan domain.Repository),
-		ciFilename:   ciFilename,
-		runner:       runner,
-		cloner:       cloner,
-		finder:       finder,
-		parser:       parser,
-		repositories: repositories,
-		logs:         logs,
-		logger:       logger,
+		poll:                make(chan domain.Repository),
+		ciFilename:          ciFilename,
+		runner:              runner,
+		cloner:              cloner,
+		finder:              finder,
+		parser:              parser,
+		repositoriesService: repositoriesService,
+		logsService:         logsService,
+		logger:              logger,
 	}
 }
 
+// Start listens on the poll channel and runs a build if the repository contains a new commit.
 func (p Poller) Start(ctx context.Context) {
 	for {
 		select {
@@ -79,12 +74,13 @@ func (p Poller) Start(ctx context.Context) {
 
 			err = p.build(ctx, repo, latestHash)
 			if err != nil {
-				p.logger.Errorf("failed to build repository: %q; %v", repo.URL, err)
+				p.logger.Errorf("failed to build: %q; %v", repo.URL, err)
 			}
 		}
 	}
 }
 
+// AddRepository sends the repository to the poll channel at regular intervals.
 func (p Poller) AddRepository(ctx context.Context, repo domain.Repository) {
 	go func() {
 		timer := time.NewTimer(repo.PollingInterval.Duration())
@@ -94,13 +90,16 @@ func (p Poller) AddRepository(ctx context.Context, repo domain.Repository) {
 			case <-ctx.Done():
 				return
 			case <-timer.C:
-				savedRepo, err := p.repositories.GetByURL(repo.URL)
+				builds, err := p.repositoriesService.GetBuilds(repo.Id)
 				if err != nil && !errors.Is(err, domain.ErrNotFound) {
-					p.logger.Errorf("failed to get saved repository: %v", err)
+					p.logger.Errorf("failed to get builds: %v", err)
+					timer.Reset(repo.PollingInterval.Duration())
+					continue
 				}
-				repo.Builds = savedRepo.Builds
 
+				repo.Builds = builds
 				p.poll <- repo
+
 				timer.Reset(repo.PollingInterval.Duration())
 			}
 		}
@@ -132,7 +131,7 @@ func (p Poller) build(ctx context.Context, repo domain.Repository, targetHash st
 		return err
 	}
 
-	logId, err := p.logs.Save(domain.Log{Data: pipelineLogs})
+	logId, err := p.logsService.Create(domain.Log{Data: pipelineLogs})
 	if err != nil {
 		return err
 	}
@@ -142,5 +141,5 @@ func (p Poller) build(ctx context.Context, repo domain.Repository, targetHash st
 		LogId:  logId,
 	})
 
-	return p.repositories.Save(repo)
+	return p.repositoriesService.Update(repo)
 }
