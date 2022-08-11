@@ -2,11 +2,14 @@ package transport
 
 import (
 	"github.com/KirillMironov/ci/internal/domain"
-	"github.com/gin-gonic/gin"
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
+	"strings"
 )
 
 // Handler used to handle HTTP requests.
 type Handler struct {
+	staticRoot          string
 	scheduler           scheduler
 	repositoriesService repositoriesService
 	logsService         logsService
@@ -26,18 +29,34 @@ type (
 	}
 )
 
-func NewHandler(scheduler scheduler, repositoriesService repositoriesService, logsService logsService) *Handler {
+func NewHandler(staticRoot string, scheduler scheduler, repositoriesService repositoriesService,
+	logsService logsService) *Handler {
 	return &Handler{
+		staticRoot:          staticRoot,
 		scheduler:           scheduler,
 		repositoriesService: repositoriesService,
 		logsService:         logsService,
 	}
 }
 
-func (h Handler) Routes() *gin.Engine {
-	gin.SetMode(gin.ReleaseMode)
-	router := gin.New()
-	router.Use(gin.Recovery(), h.corsMiddleware)
+func (h Handler) Routes() *echo.Echo {
+	router := echo.New()
+
+	router.Use(
+		middleware.Recover(),
+		middleware.CORSWithConfig(middleware.CORSConfig{
+			AllowOrigins: []string{"*"},
+			AllowMethods: []string{echo.GET, echo.PUT, echo.DELETE, echo.OPTIONS},
+		}),
+		middleware.StaticWithConfig(middleware.StaticConfig{
+			Root:  h.staticRoot,
+			HTML5: true,
+			Skipper: func(c echo.Context) bool {
+				return strings.HasPrefix(c.Request().URL.Path, "/api/")
+			},
+		}),
+	)
+
 	api := router.Group("/api/v1")
 	{
 		repositories := api.Group("/repositories")
@@ -52,5 +71,6 @@ func (h Handler) Routes() *gin.Engine {
 			logs.GET("/:id", h.getLogById)
 		}
 	}
+
 	return router
 }

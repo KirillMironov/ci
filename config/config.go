@@ -7,6 +7,7 @@ type Config struct {
 	CIFilename          string `default:".ci.yaml" envconfig:"CI_FILENAME"`
 	BoltDBPath          string `default:"./ci.db" envconfig:"BOLT_DB_PATH"`
 	RepositoriesDir     string `default:"./.cache/git/" envconfig:"REPOSITORIES_DIR"`
+	StaticRoot          string `default:"./web" envconfig:"STATIC_ROOT"`
 	ContainerWorkingDir string `default:"/ci" envconfig:"CONTAINER_WORKING_DIR"`
 }
 

@@ -4,21 +4,20 @@ import (
 	"errors"
 	"github.com/KirillMironov/ci/internal/domain"
 	"github.com/KirillMironov/ci/pkg/duration"
-	"github.com/gin-gonic/gin"
+	"github.com/labstack/echo/v4"
 	"net/http"
 )
 
-func (h Handler) putRepository(c *gin.Context) {
+func (h Handler) putRepository(c echo.Context) error {
 	var form struct {
 		URL             string            `json:"url" binding:"required"`
 		Branch          string            `json:"branch" binding:"required"`
 		PollingInterval duration.Duration `json:"polling_interval" binding:"required"`
 	}
 
-	err := c.BindJSON(&form)
+	err := c.Bind(&form)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, err.Error())
-		return
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
 	h.scheduler.Put(domain.Repository{
@@ -26,23 +25,26 @@ func (h Handler) putRepository(c *gin.Context) {
 		Branch:          form.Branch,
 		PollingInterval: form.PollingInterval,
 	})
+
+	return nil
 }
 
-func (h Handler) deleteRepository(c *gin.Context) {
+func (h Handler) deleteRepository(c echo.Context) error {
 	var form struct {
 		Id string `json:"id" binding:"required"`
 	}
 
-	err := c.BindJSON(&form)
+	err := c.Bind(&form)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, err.Error())
-		return
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
 	h.scheduler.Delete(form.Id)
+
+	return nil
 }
 
-func (h Handler) getRepositories(c *gin.Context) {
+func (h Handler) getRepositories(c echo.Context) error {
 	type Repository struct {
 		Id           string `json:"id"`
 		URL          string `json:"url"`
@@ -55,8 +57,7 @@ func (h Handler) getRepositories(c *gin.Context) {
 
 	repositories, err := h.repositoriesService.GetAll()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
-		return
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	for _, repo := range repositories {
@@ -70,19 +71,17 @@ func (h Handler) getRepositories(c *gin.Context) {
 		response.Repositories = append(response.Repositories, r)
 	}
 
-	c.JSON(http.StatusOK, response)
+	return c.JSON(http.StatusOK, response)
 }
 
-func (h Handler) getRepositoryById(c *gin.Context) {
+func (h Handler) getRepositoryById(c echo.Context) error {
 	repo, err := h.repositoriesService.GetById(c.Param("id"))
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
-			c.JSON(http.StatusNotFound, err.Error())
-			return
+			return echo.NewHTTPError(http.StatusNotFound, err.Error())
 		}
-		c.JSON(http.StatusInternalServerError, err.Error())
-		return
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	c.JSON(http.StatusOK, repo)
+	return c.JSON(http.StatusOK, repo)
 }

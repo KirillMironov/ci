@@ -3,27 +3,24 @@ package transport
 import (
 	"errors"
 	"github.com/KirillMironov/ci/internal/domain"
-	"github.com/gin-gonic/gin"
+	"github.com/labstack/echo/v4"
 	"net/http"
 	"strconv"
 )
 
-func (h Handler) getLogById(c *gin.Context) {
+func (h Handler) getLogById(c echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, err.Error())
-		return
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
 	log, err := h.logsService.GetById(id)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
-			c.JSON(http.StatusNotFound, err.Error())
-			return
+			return echo.NewHTTPError(http.StatusNotFound, err.Error())
 		}
-		c.JSON(http.StatusInternalServerError, err.Error())
-		return
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	c.JSON(http.StatusOK, string(log.Data))
+	return c.JSON(http.StatusOK, string(log.Data))
 }
