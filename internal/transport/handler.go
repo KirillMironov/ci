@@ -2,6 +2,7 @@ package transport
 
 import (
 	"github.com/KirillMironov/ci/internal/domain"
+	"github.com/KirillMironov/ci/pkg/echox"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"strings"
@@ -41,6 +42,8 @@ func NewHandler(staticRoot string, scheduler scheduler, repositoriesService repo
 
 func (h Handler) Routes() *echo.Echo {
 	router := echo.New()
+	router.Binder = echox.Binder{}
+	router.Validator = echox.NewValidator()
 
 	router.Use(
 		middleware.Recover(),

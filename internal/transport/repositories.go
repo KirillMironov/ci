@@ -10,9 +10,9 @@ import (
 
 func (h Handler) putRepository(c echo.Context) error {
 	var form struct {
-		URL             string            `json:"url" binding:"required"`
-		Branch          string            `json:"branch" binding:"required"`
-		PollingInterval duration.Duration `json:"polling_interval" binding:"required"`
+		URL             string            `json:"url" validate:"required"`
+		Branch          string            `json:"branch" validate:"required"`
+		PollingInterval duration.Duration `json:"polling_interval" validate:"required"`
 	}
 
 	err := c.Bind(&form)
@@ -31,7 +31,7 @@ func (h Handler) putRepository(c echo.Context) error {
 
 func (h Handler) deleteRepository(c echo.Context) error {
 	var form struct {
-		Id string `json:"id" binding:"required"`
+		Id string `json:"id" validate:"required"`
 	}
 
 	err := c.Bind(&form)
