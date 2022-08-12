@@ -6,8 +6,8 @@ type Config struct {
 	Port                string `default:"8080" envconfig:"PORT"`
 	CIFilename          string `default:".ci.yaml" envconfig:"CI_FILENAME"`
 	BoltDBPath          string `default:"./ci.db" envconfig:"BOLT_DB_PATH"`
+	StaticRootPath      string `default:"./web/" envconfig:"STATIC_ROOT_PATH"`
 	RepositoriesDir     string `default:"./.cache/git/" envconfig:"REPOSITORIES_DIR"`
-	StaticRoot          string `default:"./web" envconfig:"STATIC_ROOT"`
 	ContainerWorkingDir string `default:"/ci" envconfig:"CONTAINER_WORKING_DIR"`
 }
 

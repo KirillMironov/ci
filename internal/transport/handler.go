@@ -10,7 +10,7 @@ import (
 
 // Handler used to handle HTTP requests.
 type Handler struct {
-	staticRoot          string
+	staticRootPath      string
 	scheduler           scheduler
 	repositoriesService repositoriesService
 	logsService         logsService
@@ -30,10 +30,10 @@ type (
 	}
 )
 
-func NewHandler(staticRoot string, scheduler scheduler, repositoriesService repositoriesService,
+func NewHandler(staticRootPath string, scheduler scheduler, repositoriesService repositoriesService,
 	logsService logsService) *Handler {
 	return &Handler{
-		staticRoot:          staticRoot,
+		staticRootPath:      staticRootPath,
 		scheduler:           scheduler,
 		repositoriesService: repositoriesService,
 		logsService:         logsService,
@@ -52,7 +52,7 @@ func (h Handler) Routes() *echo.Echo {
 			AllowMethods: []string{echo.GET, echo.PUT, echo.DELETE, echo.OPTIONS},
 		}),
 		middleware.StaticWithConfig(middleware.StaticConfig{
-			Root:  h.staticRoot,
+			Root:  h.staticRootPath,
 			HTML5: true,
 			Skipper: func(c echo.Context) bool {
 				return strings.HasPrefix(c.Request().URL.Path, "/api/")
