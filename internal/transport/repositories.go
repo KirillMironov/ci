@@ -17,7 +17,7 @@ func (h Handler) putRepository(c echo.Context) error {
 
 	err := c.Bind(&form)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		return err
 	}
 
 	h.scheduler.Put(domain.Repository{
@@ -36,7 +36,7 @@ func (h Handler) deleteRepository(c echo.Context) error {
 
 	err := c.Bind(&form)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		return err
 	}
 
 	h.scheduler.Delete(form.Id)
@@ -57,7 +57,7 @@ func (h Handler) getRepositories(c echo.Context) error {
 
 	repositories, err := h.repositoriesService.GetAll()
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, err)
 	}
 
 	for _, repo := range repositories {
@@ -78,9 +78,9 @@ func (h Handler) getRepositoryById(c echo.Context) error {
 	repo, err := h.repositoriesService.GetById(c.Param("id"))
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
-			return echo.NewHTTPError(http.StatusNotFound, err.Error())
+			return echo.NewHTTPError(http.StatusNotFound, err)
 		}
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, err)
 	}
 
 	return c.JSON(http.StatusOK, repo)
