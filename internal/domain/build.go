@@ -1,21 +1,34 @@
 package domain
 
-import "encoding/json"
+import (
+	"context"
+	"encoding/json"
+)
 
 type Build struct {
-	Commit Commit `json:"commit"`
-	Status Status `json:"status"`
-	LogId  int    `json:"log_id"`
+	Id     string
+	LogId  string
+	Commit Commit
+	Status Status
 }
 
 func (b Build) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
+		Id     string `json:"id"`
+		LogId  string `json:"log_id"`
 		Commit Commit `json:"commit"`
 		Status string `json:"status"`
-		LogId  int    `json:"log_id"`
 	}{
+		Id:     b.Id,
+		LogId:  b.LogId,
 		Commit: b.Commit,
 		Status: b.Status.String(),
-		LogId:  b.LogId,
 	})
+}
+
+type BuildsUsecase interface {
+	Create(ctx context.Context, build Build, repoId string) error
+	Delete(ctx context.Context, id, repoId string) error
+	GetAllByRepoId(ctx context.Context, repoId string) ([]Build, error)
+	GetById(ctx context.Context, id, repoId string) (Build, error)
 }

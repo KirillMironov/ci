@@ -2,7 +2,7 @@ package storage
 
 import (
 	"bytes"
-	"encoding/binary"
+	"context"
 	"encoding/gob"
 	"github.com/KirillMironov/ci/internal/domain"
 	"go.etcd.io/bbolt"
@@ -26,25 +26,23 @@ func NewLogs(db *bbolt.DB, bucket string) (*Logs, error) {
 	}, err
 }
 
-func (l Logs) Create(log domain.Log) (id int, err error) {
+func (l Logs) Create(_ context.Context, log domain.Log) error {
 	var buf bytes.Buffer
-	encoder := gob.NewEncoder(&buf)
+	var encoder = gob.NewEncoder(&buf)
 
-	return log.Id, l.db.Update(func(tx *bbolt.Tx) error {
-		b := tx.Bucket([]byte(l.bucket))
-		id, _ := b.NextSequence()
-		log.Id = int(id)
-		if err = encoder.Encode(log); err != nil {
+	return l.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket([]byte(l.bucket))
+		if err := encoder.Encode(log); err != nil {
 			return err
 		}
-		return b.Put(intToBytes(log.Id), buf.Bytes())
+		return bucket.Put([]byte(log.Id), buf.Bytes())
 	})
 }
 
-func (l Logs) GetById(id int) (log domain.Log, err error) {
+func (l Logs) GetById(_ context.Context, id string) (log domain.Log, err error) {
 	err = l.db.View(func(tx *bbolt.Tx) error {
-		b := tx.Bucket([]byte(l.bucket))
-		v := b.Get(intToBytes(id))
+		bucket := tx.Bucket([]byte(l.bucket))
+		v := bucket.Get([]byte(id))
 		if v == nil {
 			return domain.ErrNotFound
 		}
@@ -52,10 +50,4 @@ func (l Logs) GetById(id int) (log domain.Log, err error) {
 		return decoder.Decode(&log)
 	})
 	return log, err
-}
-
-func intToBytes(v int) []byte {
-	b := make([]byte, 8)
-	binary.BigEndian.PutUint64(b, uint64(v))
-	return b
 }

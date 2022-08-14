@@ -8,7 +8,7 @@ import (
 	"net/http"
 )
 
-func (h Handler) putRepository(c echo.Context) error {
+func (h Handler) addRepository(c echo.Context) error {
 	var form struct {
 		URL             string            `json:"url" validate:"required"`
 		Branch          string            `json:"branch" validate:"required"`
@@ -20,13 +20,16 @@ func (h Handler) putRepository(c echo.Context) error {
 		return err
 	}
 
-	h.scheduler.Put(domain.Repository{
+	err = h.repositoriesUsecase.Add(c.Request().Context(), domain.Repository{
 		URL:             form.URL,
 		Branch:          form.Branch,
 		PollingInterval: form.PollingInterval,
 	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err)
+	}
 
-	return nil
+	return c.NoContent(http.StatusCreated)
 }
 
 func (h Handler) deleteRepository(c echo.Context) error {
@@ -39,43 +42,16 @@ func (h Handler) deleteRepository(c echo.Context) error {
 		return err
 	}
 
-	h.scheduler.Delete(form.Id)
-
-	return nil
-}
-
-func (h Handler) getRepositories(c echo.Context) error {
-	type Repository struct {
-		Id           string `json:"id"`
-		URL          string `json:"url"`
-		LatestCommit string `json:"latest_commit"`
-	}
-
-	var response struct {
-		Repositories []Repository `json:"repositories"`
-	}
-
-	repositories, err := h.repositoriesService.GetAll()
+	err = h.repositoriesUsecase.Delete(c.Request().Context(), form.Id)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err)
 	}
 
-	for _, repo := range repositories {
-		var r = Repository{
-			Id:  repo.Id,
-			URL: repo.URL,
-		}
-		if len(repo.Builds) > 0 {
-			r.LatestCommit = repo.Builds[len(repo.Builds)-1].Commit.Hash
-		}
-		response.Repositories = append(response.Repositories, r)
-	}
-
-	return c.JSON(http.StatusOK, response)
+	return c.NoContent(http.StatusNoContent)
 }
 
-func (h Handler) getRepositoryById(c echo.Context) error {
-	repo, err := h.repositoriesService.GetById(c.Param("id"))
+func (h Handler) getRepositories(c echo.Context) error {
+	repositories, err := h.repositoriesUsecase.GetAll(c.Request().Context())
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, err)
@@ -83,5 +59,17 @@ func (h Handler) getRepositoryById(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err)
 	}
 
-	return c.JSON(http.StatusOK, repo)
+	return c.JSON(http.StatusOK, echo.Map{"repositories": repositories})
+}
+
+func (h Handler) getRepositoryById(c echo.Context) error {
+	repository, err := h.repositoriesUsecase.GetById(c.Request().Context(), c.Param("repoId"))
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return echo.NewHTTPError(http.StatusNotFound, err)
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, err)
+	}
+
+	return c.JSON(http.StatusOK, repository)
 }

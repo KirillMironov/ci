@@ -2,6 +2,7 @@ package storage
 
 import (
 	"bytes"
+	"context"
 	"encoding/gob"
 	"github.com/KirillMironov/ci/internal/domain"
 	"go.etcd.io/bbolt"
@@ -25,32 +26,33 @@ func NewRepositories(db *bbolt.DB, bucket string) (*Repositories, error) {
 	}, err
 }
 
-func (r Repositories) Create(repo domain.Repository) error {
+func (r Repositories) Create(_ context.Context, repo domain.Repository) error {
 	var buf bytes.Buffer
-	encoder := gob.NewEncoder(&buf)
-	if err := encoder.Encode(repo); err != nil {
-		return err
-	}
+	var encoder = gob.NewEncoder(&buf)
 
 	return r.db.Update(func(tx *bbolt.Tx) error {
-		b := tx.Bucket([]byte(r.bucket))
-		return b.Put([]byte(repo.Id), buf.Bytes())
+		bucket := tx.Bucket([]byte(r.bucket))
+		err := encoder.Encode(repo)
+		if err != nil {
+			return err
+		}
+		return bucket.Put([]byte(repo.Id), buf.Bytes())
 	})
 }
 
-func (r Repositories) Delete(id string) error {
+func (r Repositories) Delete(_ context.Context, id string) error {
 	return r.db.Update(func(tx *bbolt.Tx) error {
-		b := tx.Bucket([]byte(r.bucket))
-		return b.Delete([]byte(id))
+		bucket := tx.Bucket([]byte(r.bucket))
+		return bucket.Delete([]byte(id))
 	})
 }
 
-func (r Repositories) GetAll() (repos []domain.Repository, err error) {
+func (r Repositories) GetAll(_ context.Context) (repos []domain.Repository, err error) {
 	err = r.db.View(func(tx *bbolt.Tx) error {
-		b := tx.Bucket([]byte(r.bucket))
-		return b.ForEach(func(k, v []byte) error {
+		bucket := tx.Bucket([]byte(r.bucket))
+		return bucket.ForEach(func(k, v []byte) error {
 			var repo domain.Repository
-			decoder := gob.NewDecoder(bytes.NewReader(v))
+			var decoder = gob.NewDecoder(bytes.NewReader(v))
 			if err = decoder.Decode(&repo); err != nil {
 				return err
 			}
@@ -61,7 +63,20 @@ func (r Repositories) GetAll() (repos []domain.Repository, err error) {
 	return repos, err
 }
 
-func (r Repositories) GetById(id string) (repo domain.Repository, err error) {
+func (r Repositories) GetById(_ context.Context, id string) (repo domain.Repository, err error) {
+	err = r.db.View(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket([]byte(r.bucket))
+		v := bucket.Get([]byte(id))
+		if v == nil {
+			return domain.ErrNotFound
+		}
+		decoder := gob.NewDecoder(bytes.NewReader(v))
+		return decoder.Decode(&repo)
+	})
+	return repo, err
+}
+
+func (r Repositories) GetByURL(_ context.Context, url string) (repo domain.Repository, err error) {
 	err = r.db.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte(r.bucket))
 		c := b.Cursor()
@@ -71,7 +86,7 @@ func (r Repositories) GetById(id string) (repo domain.Repository, err error) {
 			if err = decoder.Decode(&tempRepo); err != nil {
 				return err
 			}
-			if tempRepo.Id == id {
+			if tempRepo.URL == url {
 				repo = tempRepo
 				return nil
 			}

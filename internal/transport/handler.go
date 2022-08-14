@@ -11,32 +11,18 @@ import (
 // Handler used to handle HTTP requests.
 type Handler struct {
 	staticRootPath      string
-	scheduler           scheduler
-	repositoriesService repositoriesService
-	logsService         logsService
+	repositoriesUsecase domain.RepositoriesUsecase
+	buildsUsecase       domain.BuildsUsecase
+	logsUsecase         domain.LogsUsecase
 }
 
-type (
-	scheduler interface {
-		Put(domain.Repository)
-		Delete(id string)
-	}
-	repositoriesService interface {
-		GetAll() ([]domain.Repository, error)
-		GetById(id string) (domain.Repository, error)
-	}
-	logsService interface {
-		GetById(id int) (domain.Log, error)
-	}
-)
-
-func NewHandler(staticRootPath string, scheduler scheduler, repositoriesService repositoriesService,
-	logsService logsService) *Handler {
+func NewHandler(staticRootPath string, repositoriesUsecase domain.RepositoriesUsecase,
+	buildsUsecase domain.BuildsUsecase, logsUsecase domain.LogsUsecase) *Handler {
 	return &Handler{
 		staticRootPath:      staticRootPath,
-		scheduler:           scheduler,
-		repositoriesService: repositoriesService,
-		logsService:         logsService,
+		repositoriesUsecase: repositoriesUsecase,
+		buildsUsecase:       buildsUsecase,
+		logsUsecase:         logsUsecase,
 	}
 }
 
@@ -49,7 +35,7 @@ func (h Handler) Routes() *echo.Echo {
 		middleware.Recover(),
 		middleware.CORSWithConfig(middleware.CORSConfig{
 			AllowOrigins: []string{"*"},
-			AllowMethods: []string{echo.GET, echo.PUT, echo.DELETE, echo.OPTIONS},
+			AllowMethods: []string{echo.GET, echo.POST, echo.DELETE, echo.OPTIONS},
 		}),
 		middleware.StaticWithConfig(middleware.StaticConfig{
 			Root:  h.staticRootPath,
@@ -64,14 +50,19 @@ func (h Handler) Routes() *echo.Echo {
 	{
 		repositories := api.Group("/repositories")
 		{
-			repositories.PUT("", h.putRepository)
+			repositories.POST("", h.addRepository)
 			repositories.DELETE("", h.deleteRepository)
 			repositories.GET("", h.getRepositories)
-			repositories.GET("/:id", h.getRepositoryById)
+			repositories.GET("/:repoId", h.getRepositoryById)
+		}
+		builds := api.Group("/repositories/:repoId/builds")
+		{
+			builds.GET("", h.getBuildsByRepositoryId)
+			builds.GET("/:buildId", h.getBuild)
 		}
 		logs := api.Group("/logs")
 		{
-			logs.GET("/:id", h.getLogById)
+			logs.GET("/:logId", h.getLogById)
 		}
 	}
 

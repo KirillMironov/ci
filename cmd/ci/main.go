@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"github.com/KirillMironov/ci/config"
+	"github.com/KirillMironov/ci/internal/domain"
 	"github.com/KirillMironov/ci/internal/service"
 	"github.com/KirillMironov/ci/internal/storage"
 	"github.com/KirillMironov/ci/internal/transport"
+	"github.com/KirillMironov/ci/internal/usecase"
 	"github.com/docker/docker/client"
 	"github.com/sirupsen/logrus"
 	"go.etcd.io/bbolt"
@@ -52,23 +54,34 @@ func main() {
 		logger.Fatal(err)
 	}
 
+	buildsStorage, err := storage.NewBuilds(db, "builds")
+	if err != nil {
+		logger.Fatal(err)
+	}
+
 	logsStorage, err := storage.NewLogs(db, "logs")
 	if err != nil {
 		logger.Fatal(err)
 	}
 
 	var (
-		repositoriesService = service.NewRepositories(repositoriesStorage)
-		logsService         = service.NewLogs(logsStorage)
-		archiver            = &service.TarArchiver{}
-		parser              = &service.YAMLParser{}
-		cloner              = service.NewCloner(cfg.RepositoriesDir, archiver)
-		executor            = service.NewDockerExecutor(cli, cfg.ContainerWorkingDir)
-		runner              = service.NewRunner(executor)
-		poller              = service.NewPoller(cfg.CIFilename, runner, cloner, archiver, parser, repositoriesService,
-			logsService, logger)
-		scheduler = service.NewScheduler(poller, repositoriesService, logger)
-		handler   = transport.NewHandler(cfg.StaticRootPath, scheduler, repositoriesService, logsService)
+		add    = make(chan domain.Repository)
+		remove = make(chan string)
+
+		repositoriesUsecase = usecase.NewRepositories(repositoriesStorage, add, remove)
+		buildsUsecase       = usecase.NewBuilds(buildsStorage)
+		logsUsecase         = usecase.NewLogs(logsStorage)
+
+		archiver = &service.TarArchiver{}
+		parser   = &service.YAMLParser{}
+		cloner   = service.NewCloner(cfg.RepositoriesDir, archiver)
+		executor = service.NewDockerExecutor(cli, cfg.ContainerWorkingDir)
+		runner   = service.NewRunner(executor)
+		poller   = service.NewPoller(cfg.CIFilename, runner, cloner, archiver, parser, repositoriesUsecase,
+			buildsUsecase, logsUsecase, logger)
+		scheduler = service.NewScheduler(add, remove, poller, repositoriesUsecase, logger)
+
+		handler = transport.NewHandler(cfg.StaticRootPath, repositoriesUsecase, buildsUsecase, logsUsecase)
 	)
 
 	// Scheduler & Poller

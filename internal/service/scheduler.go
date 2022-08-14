@@ -9,51 +9,49 @@ import (
 
 // Scheduler used to schedule repositories polling.
 type Scheduler struct {
-	put    chan domain.Repository
-	delete chan string
+	add    chan domain.Repository
+	remove chan string
 	// activePolling used to cancel a repository polling if it's already running.
 	activePolling       map[string]context.CancelFunc
 	once                sync.Once
 	poller              poller
-	repositoriesService domain.RepositoriesService
+	repositoriesUsecase repositoriesUsecase
 	logger              logger.Logger
 }
 
-type poller interface {
-	AddRepository(context.Context, domain.Repository)
-}
+type (
+	poller interface {
+		AddRepository(context.Context, domain.Repository)
+	}
+	repositoriesUsecase interface {
+		GetAll(context.Context) ([]domain.Repository, error)
+	}
+)
 
-func NewScheduler(poller poller, repositoriesService domain.RepositoriesService, logger logger.Logger) *Scheduler {
+func NewScheduler(add chan domain.Repository, remove chan string, poller poller,
+	repositoriesUsecase repositoriesUsecase, logger logger.Logger) *Scheduler {
 	return &Scheduler{
-		put:                 make(chan domain.Repository),
-		delete:              make(chan string),
+		add:                 add,
+		remove:              remove,
 		activePolling:       make(map[string]context.CancelFunc),
 		poller:              poller,
-		repositoriesService: repositoriesService,
+		repositoriesUsecase: repositoriesUsecase,
 		logger:              logger,
 	}
-}
-
-func (s *Scheduler) Put(repo domain.Repository) {
-	s.put <- repo
-}
-
-func (s *Scheduler) Delete(id string) {
-	s.delete <- id
 }
 
 // Start listens for repositories additions and deletions and starts polling.
 func (s *Scheduler) Start(ctx context.Context) {
 	s.once.Do(func() {
 		go func() {
-			repos, err := s.repositoriesService.GetAll()
+			repos, err := s.repositoriesUsecase.GetAll(context.Background())
 			if err != nil {
 				s.logger.Errorf("failed to get all saved repositories: %v", err)
 				return
 			}
 
 			for _, repo := range repos {
-				s.put <- repo
+				s.add <- repo
 			}
 		}()
 	})
@@ -63,25 +61,13 @@ func (s *Scheduler) Start(ctx context.Context) {
 		case <-ctx.Done():
 			s.logger.Infof("scheduler stopped: %v", ctx.Err())
 			return
-		case repo := <-s.put:
+		case repo := <-s.add:
 			s.cancelPolling(repo.Id)
-
-			repo, err := s.repositoriesService.GetOrCreate(repo)
-			if err != nil {
-				s.logger.Errorf("failed to create repository: %v", err)
-				continue
-			}
-
 			pollCtx, cancel := context.WithCancel(ctx)
 			s.activePolling[repo.Id] = cancel
 			s.poller.AddRepository(pollCtx, repo)
-		case repoURL := <-s.delete:
-			s.cancelPolling(repoURL)
-
-			err := s.repositoriesService.Delete(repoURL)
-			if err != nil {
-				s.logger.Errorf("failed to delete repository %s: %v", repoURL, err)
-			}
+		case id := <-s.remove:
+			s.cancelPolling(id)
 		}
 	}
 }
