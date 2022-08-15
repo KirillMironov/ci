@@ -13,66 +13,77 @@ const (
 )
 
 func TestCloner_GetLatestCommitHash(t *testing.T) {
-	var cloner Cloner
-
 	tests := map[string]struct {
 		repo               domain.Repository
 		expectedCommitHash string
 		expectedError      error
 	}{
 		"success": {
-			repo:               domain.Repository{URL: url, Branch: branch},
+			repo:               domain.Repository{Id: "0", URL: url, Branch: branch},
 			expectedCommitHash: latestCommitHash,
 			expectedError:      nil,
 		},
 		"branch not found": {
-			repo:               domain.Repository{URL: url, Branch: "-"},
+			repo:               domain.Repository{Id: "0", URL: url, Branch: "-"},
 			expectedCommitHash: "",
 			expectedError:      ErrBranchNotFound,
+		},
+		"repository not found": {
+			repo:               domain.Repository{Id: "0", URL: "example.com", Branch: "main"},
+			expectedCommitHash: "",
+			expectedError:      ErrRepositoryNotFound,
 		},
 	}
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
+			var cloner = NewCloner(t.TempDir(), &TarArchiver{})
+
 			commitHash, err := cloner.GetLatestCommitHash(tc.repo)
 
 			assert.Equal(t, tc.expectedCommitHash, commitHash)
-			assert.Equal(t, tc.expectedError, err)
+			assert.ErrorIs(t, err, tc.expectedError)
 		})
 	}
 }
 
 func TestCloner_CloneRepository(t *testing.T) {
-	var cloner = NewCloner(t.TempDir(), &TarArchiver{})
-
 	tests := map[string]struct {
-		repo              domain.Repository
-		targetCommitHash  string
-		expectArchivePath bool
-		expectError       bool
+		repo          domain.Repository
+		targetHash    string
+		expectedError error
 	}{
 		"success": {
-			repo:              domain.Repository{URL: url, Branch: branch},
-			targetCommitHash:  latestCommitHash,
-			expectArchivePath: true,
-			expectError:       false,
+			repo:          domain.Repository{Id: "0", URL: url, Branch: branch},
+			targetHash:    latestCommitHash,
+			expectedError: nil,
 		},
-		"target commit not found": {
-			repo:              domain.Repository{URL: url, Branch: "-"},
-			targetCommitHash:  "-",
-			expectArchivePath: false,
-			expectError:       true,
+		"revision not found": {
+			repo:          domain.Repository{Id: "0", URL: url, Branch: branch},
+			targetHash:    "-",
+			expectedError: ErrRevisionNotFound,
+		},
+		"branch not found": {
+			repo:          domain.Repository{Id: "0", URL: url, Branch: "-"},
+			targetHash:    latestCommitHash,
+			expectedError: ErrBranchNotFound,
+		},
+		"repository not found": {
+			repo:          domain.Repository{Id: "0", URL: "example.com", Branch: "main"},
+			targetHash:    latestCommitHash,
+			expectedError: ErrRepositoryNotFound,
 		},
 	}
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			archivePath, removeArchive, err := cloner.CloneRepository(tc.repo, tc.targetCommitHash)
+			var cloner = NewCloner(t.TempDir(), &TarArchiver{})
 
-			assert.Equal(t, tc.expectArchivePath, archivePath != "")
-			assert.Equal(t, tc.expectError, err != nil)
+			archivePath, removeArchive, err := cloner.CloneRepository(tc.repo, tc.targetHash)
 
-			if tc.expectArchivePath {
+			assert.ErrorIs(t, err, tc.expectedError)
+
+			if tc.expectedError == nil {
 				assert.FileExists(t, archivePath)
 				removeArchive()
 				assert.NoFileExists(t, archivePath)

@@ -28,7 +28,7 @@ type (
 	}
 	cloner interface {
 		GetLatestCommitHash(domain.Repository) (string, error)
-		CloneRepository(domain.Repository, string) (archivePath string, removeArchive func(), err error)
+		CloneRepository(repo domain.Repository, targetHash string) (archivePath string, removeArchive func(), err error)
 	}
 	finder interface {
 		FindFile(filename, archivePath string) ([]byte, error)
