@@ -8,7 +8,6 @@ import (
 	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/transport"
-	"os"
 	"path/filepath"
 )
 
@@ -22,18 +21,10 @@ var (
 type Cloner struct {
 	// Path to the directory where repositories are stored.
 	repositoriesDir string
-	archiver        archiver
 }
 
-type archiver interface {
-	Compress(dir string) (archivePath string, err error)
-}
-
-func NewCloner(repositoriesDir string, archiver archiver) *Cloner {
-	return &Cloner{
-		repositoriesDir: repositoriesDir,
-		archiver:        archiver,
-	}
+func NewCloner(repositoriesDir string) *Cloner {
+	return &Cloner{repositoriesDir: repositoriesDir}
 }
 
 // GetLatestCommitHash returns the hash of the latest commit in the given repository branch.
@@ -59,16 +50,15 @@ func (Cloner) GetLatestCommitHash(repo domain.Repository) (string, error) {
 }
 
 // CloneRepository clones a repository and returns the path to the compressed source code archive.
-func (c Cloner) CloneRepository(repo domain.Repository, targetHash string) (archivePath string, removeArchive func(),
-	err error) {
-	repository, localPath, err := c.openOrCloneRepository(repo)
+func (c Cloner) CloneRepository(repo domain.Repository, targetHash string) (srcCodePath string, err error) {
+	repository, srcCodePath, err := c.openOrCloneRepository(repo)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to open or clone repository: %w", err)
+		return "", fmt.Errorf("failed to open or clone repository: %w", err)
 	}
 
 	wt, err := repository.Worktree()
 	if err != nil {
-		return "", nil, err
+		return "", err
 	}
 
 	err = wt.Pull(&git.PullOptions{
@@ -76,28 +66,18 @@ func (c Cloner) CloneRepository(repo domain.Repository, targetHash string) (arch
 		SingleBranch:  true,
 	})
 	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
-		return "", nil, err
+		return "", err
 	}
 
 	revision, err := repository.ResolveRevision(plumbing.Revision(targetHash))
 	if err != nil {
 		if errors.Is(err, plumbing.ErrReferenceNotFound) {
-			return "", nil, ErrRevisionNotFound
+			return "", ErrRevisionNotFound
 		}
-		return "", nil, err
+		return "", err
 	}
 
-	err = wt.Checkout(&git.CheckoutOptions{Hash: *revision})
-	if err != nil {
-		return "", nil, err
-	}
-
-	archivePath, err = c.archiver.Compress(localPath)
-	if err != nil {
-		return "", nil, err
-	}
-
-	return archivePath, func() { os.Remove(archivePath) }, nil
+	return srcCodePath, wt.Checkout(&git.CheckoutOptions{Hash: *revision})
 }
 
 func (c Cloner) openOrCloneRepository(repo domain.Repository) (repository *git.Repository, localPath string, _ error) {

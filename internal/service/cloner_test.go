@@ -37,7 +37,7 @@ func TestCloner_GetLatestCommitHash(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			var cloner = NewCloner(t.TempDir(), &TarArchiver{})
+			var cloner = NewCloner(t.TempDir())
 
 			commitHash, err := cloner.GetLatestCommitHash(tc.repo)
 
@@ -77,16 +77,15 @@ func TestCloner_CloneRepository(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			var cloner = NewCloner(t.TempDir(), &TarArchiver{})
+			var cloner = NewCloner(t.TempDir())
 
-			archivePath, removeArchive, err := cloner.CloneRepository(tc.repo, tc.targetHash)
-
+			srcCodePath, err := cloner.CloneRepository(tc.repo, tc.targetHash)
 			assert.ErrorIs(t, err, tc.expectedError)
 
 			if tc.expectedError == nil {
-				assert.FileExists(t, archivePath)
-				removeArchive()
-				assert.NoFileExists(t, archivePath)
+				assert.DirExists(t, srcCodePath)
+			} else {
+				assert.NoDirExists(t, srcCodePath)
 			}
 		})
 	}

@@ -3,12 +3,12 @@ package service
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/KirillMironov/ci/internal/domain"
 	"github.com/docker/docker/api/types"
 	containertypes "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"io"
+	"os"
 )
 
 // DockerExecutor used to execute a step in a container.
@@ -16,19 +16,32 @@ type DockerExecutor struct {
 	cli *client.Client
 	// Container working directory.
 	workingDir string
+	archiver   archiver
+}
+
+type archiver interface {
+	Compress(dir string) (archivePath string, removeArchive func(), err error)
 }
 
 // NewDockerExecutor creates a new DockerExecutor with a provided docker client.
-func NewDockerExecutor(cli *client.Client, workingDir string) *DockerExecutor {
+func NewDockerExecutor(cli *client.Client, workingDir string, archiver archiver) *DockerExecutor {
 	return &DockerExecutor{
 		cli:        cli,
 		workingDir: workingDir,
+		archiver:   archiver,
 	}
 }
 
 // ExecuteStep copies the source code to the container, executes the step and returns container logs.
-func (de DockerExecutor) ExecuteStep(ctx context.Context, step domain.Step, sourceCodeArchive io.Reader) (
-	logs io.ReadCloser, err error) {
+func (de DockerExecutor) ExecuteStep(ctx context.Context, step domain.Step, srcCodePath string) (logs io.ReadCloser,
+	err error) {
+	archive, removeArchive, err := de.srcCodeToArchive(srcCodePath)
+	if err != nil {
+		return nil, err
+	}
+	defer removeArchive()
+	defer archive.Close()
+
 	config := &containertypes.Config{
 		Image:      step.Image,
 		Env:        step.Environment,
@@ -50,7 +63,7 @@ func (de DockerExecutor) ExecuteStep(ctx context.Context, step domain.Step, sour
 		return nil, err
 	}
 
-	err = de.cli.CopyToContainer(ctx, container.ID, de.workingDir, sourceCodeArchive, types.CopyToContainerOptions{})
+	err = de.cli.CopyToContainer(ctx, container.ID, de.workingDir, archive, types.CopyToContainerOptions{})
 	if err != nil {
 		return logs, err
 	}
@@ -77,9 +90,23 @@ func (de DockerExecutor) ExecuteStep(ctx context.Context, step domain.Step, sour
 		case result.Error != nil:
 			return logs, errors.New(result.Error.Message)
 		case result.StatusCode != 0:
-			return logs, fmt.Errorf("exit code: %d", result.StatusCode)
+			return logs, domain.ExitError{Code: result.StatusCode}
 		default:
 			return logs, nil
 		}
 	}
+}
+
+func (de DockerExecutor) srcCodeToArchive(srcCodePath string) (io.ReadCloser, func(), error) {
+	archivePath, removeArchive, err := de.archiver.Compress(srcCodePath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	archive, err := os.Open(archivePath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return archive, removeArchive, nil
 }

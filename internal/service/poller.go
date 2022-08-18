@@ -5,53 +5,42 @@ import (
 	"errors"
 	"github.com/KirillMironov/ci/internal/domain"
 	"github.com/KirillMironov/ci/pkg/logger"
+	"os"
+	"path/filepath"
 	"time"
 )
 
 // Poller used to poll repositories and run builds.
 type Poller struct {
-	poll                chan domain.Repository
-	ciFilename          string
-	runner              runner
-	cloner              cloner
-	finder              finder
-	parser              parser
-	repositoriesUsecase domain.RepositoriesUsecase
-	buildsUsecase       domain.BuildsUsecase
-	logsUsecase         domain.LogsUsecase
-	logger              logger.Logger
+	poll          chan domain.Repository
+	run           chan<- RunRequest
+	ciFilename    string
+	cloner        cloner
+	parser        parser
+	buildsUsecase domain.BuildsUsecase
+	logger        logger.Logger
 }
 
 type (
-	runner interface {
-		Run(ctx context.Context, pipeline domain.Pipeline, srcCodeArchivePath string) (logs []byte, err error)
-	}
 	cloner interface {
 		GetLatestCommitHash(domain.Repository) (string, error)
-		CloneRepository(repo domain.Repository, targetHash string) (archivePath string, removeArchive func(), err error)
-	}
-	finder interface {
-		FindFile(filename, archivePath string) ([]byte, error)
+		CloneRepository(repo domain.Repository, targetHash string) (srcCodePath string, err error)
 	}
 	parser interface {
 		ParsePipeline(b []byte) (domain.Pipeline, error)
 	}
 )
 
-func NewPoller(ciFilename string, runner runner, cloner cloner, finder finder, parser parser,
-	repositoriesUsecase domain.RepositoriesUsecase, buildsUsecase domain.BuildsUsecase, logsUsecase domain.LogsUsecase,
+func NewPoller(run chan<- RunRequest, ciFilename string, cloner cloner, parser parser, bu domain.BuildsUsecase,
 	logger logger.Logger) *Poller {
 	return &Poller{
-		poll:                make(chan domain.Repository),
-		ciFilename:          ciFilename,
-		runner:              runner,
-		cloner:              cloner,
-		finder:              finder,
-		parser:              parser,
-		repositoriesUsecase: repositoriesUsecase,
-		buildsUsecase:       buildsUsecase,
-		logsUsecase:         logsUsecase,
-		logger:              logger,
+		run:           run,
+		poll:          make(chan domain.Repository),
+		ciFilename:    ciFilename,
+		cloner:        cloner,
+		parser:        parser,
+		buildsUsecase: bu,
+		logger:        logger,
 	}
 }
 
@@ -78,9 +67,29 @@ func (p Poller) Start(ctx context.Context) {
 				continue
 			}
 
-			err = p.build(ctx, repo, latestHash)
+			srcCodePath, err := p.cloner.CloneRepository(repo, latestHash)
 			if err != nil {
-				p.logger.Errorf("failed to build: %q; %v", repo.URL, err)
+				p.logger.Errorf("failed to clone repository: %v", err)
+				continue
+			}
+
+			data, err := os.ReadFile(filepath.Join(srcCodePath, p.ciFilename))
+			if err != nil {
+				p.logger.Errorf("failed to read ci file: %v", err)
+				continue
+			}
+
+			pipeline, err := p.parser.ParsePipeline(data)
+			if err != nil {
+				p.logger.Errorf("failed to parse pipeline: %v", err)
+				continue
+			}
+
+			p.run <- RunRequest{
+				repoId:      repo.Id,
+				commit:      domain.Commit{Hash: latestHash},
+				pipeline:    pipeline,
+				srcCodePath: srcCodePath,
 			}
 		}
 	}
@@ -101,41 +110,4 @@ func (p Poller) AddRepository(ctx context.Context, repo domain.Repository) {
 			}
 		}
 	}()
-}
-
-func (p Poller) build(ctx context.Context, repo domain.Repository, targetHash string) error {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	archivePath, removeArchive, err := p.cloner.CloneRepository(repo, targetHash)
-	if err != nil {
-		return err
-	}
-	defer removeArchive()
-
-	yaml, err := p.finder.FindFile(p.ciFilename, archivePath)
-	if err != nil {
-		return err
-	}
-
-	pipeline, err := p.parser.ParsePipeline(yaml)
-	if err != nil {
-		return err
-	}
-
-	var build = domain.Build{
-		Commit: domain.Commit{Hash: targetHash},
-	}
-
-	pipelineLogs, err := p.runner.Run(ctx, pipeline, archivePath)
-	if err != nil {
-		build.Status = domain.Failure
-	}
-
-	build.LogId, err = p.logsUsecase.Create(ctx, domain.Log{Data: pipelineLogs})
-	if err != nil {
-		return err
-	}
-
-	return p.buildsUsecase.Create(ctx, build, repo.Id)
 }

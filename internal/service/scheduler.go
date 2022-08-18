@@ -10,9 +10,9 @@ import (
 // Scheduler used to schedule repositories polling.
 type Scheduler struct {
 	add    chan domain.Repository
-	remove chan string
-	// activePolling used to cancel a repository polling if it's already running.
-	activePolling       map[string]context.CancelFunc
+	remove <-chan string
+	// active used to cancel a repository polling if it's already running.
+	active              map[string]context.CancelFunc
 	once                sync.Once
 	poller              poller
 	repositoriesUsecase repositoriesUsecase
@@ -28,14 +28,14 @@ type (
 	}
 )
 
-func NewScheduler(add chan domain.Repository, remove chan string, poller poller,
-	repositoriesUsecase repositoriesUsecase, logger logger.Logger) *Scheduler {
+func NewScheduler(add chan domain.Repository, remove <-chan string, poller poller, ru repositoriesUsecase,
+	logger logger.Logger) *Scheduler {
 	return &Scheduler{
 		add:                 add,
 		remove:              remove,
-		activePolling:       make(map[string]context.CancelFunc),
+		active:              make(map[string]context.CancelFunc),
 		poller:              poller,
-		repositoriesUsecase: repositoriesUsecase,
+		repositoriesUsecase: ru,
 		logger:              logger,
 	}
 }
@@ -46,7 +46,7 @@ func (s *Scheduler) Start(ctx context.Context) {
 		go func() {
 			repos, err := s.repositoriesUsecase.GetAll(context.Background())
 			if err != nil {
-				s.logger.Errorf("failed to get all saved repositories: %v", err)
+				s.logger.Errorf("failed to get saved repositories: %v", err)
 				return
 			}
 
@@ -62,19 +62,14 @@ func (s *Scheduler) Start(ctx context.Context) {
 			s.logger.Infof("scheduler stopped: %v", ctx.Err())
 			return
 		case repo := <-s.add:
-			s.cancelPolling(repo.Id)
 			pollCtx, cancel := context.WithCancel(ctx)
-			s.activePolling[repo.Id] = cancel
+			s.active[repo.Id] = cancel
 			s.poller.AddRepository(pollCtx, repo)
 		case id := <-s.remove:
-			s.cancelPolling(id)
+			if cancel, ok := s.active[id]; ok {
+				cancel()
+				delete(s.active, id)
+			}
 		}
-	}
-}
-
-func (s *Scheduler) cancelPolling(id string) {
-	if cancel, ok := s.activePolling[id]; ok {
-		cancel()
-		delete(s.activePolling, id)
 	}
 }

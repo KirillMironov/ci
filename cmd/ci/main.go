@@ -67,24 +67,24 @@ func main() {
 	var (
 		add    = make(chan domain.Repository)
 		remove = make(chan string)
+		run    = make(chan service.RunRequest)
 
 		repositoriesUsecase = usecase.NewRepositories(repositoriesStorage, add, remove)
 		buildsUsecase       = usecase.NewBuilds(buildsStorage)
 		logsUsecase         = usecase.NewLogs(logsStorage)
 
-		archiver = &service.TarArchiver{}
-		parser   = &service.YAMLParser{}
-		cloner   = service.NewCloner(cfg.RepositoriesDir, archiver)
-		executor = service.NewDockerExecutor(cli, cfg.ContainerWorkingDir)
-		runner   = service.NewRunner(executor)
-		poller   = service.NewPoller(cfg.CIFilename, runner, cloner, archiver, parser, repositoriesUsecase,
-			buildsUsecase, logsUsecase, logger)
+		archiver  = &service.TarArchiver{}
+		parser    = &service.YAMLParser{}
+		cloner    = service.NewCloner(cfg.RepositoriesDir)
+		executor  = service.NewDockerExecutor(cli, cfg.ContainerWorkingDir, archiver)
+		runner    = service.NewRunner(run, executor, buildsUsecase, logsUsecase, logger)
+		poller    = service.NewPoller(run, cfg.CIFilename, cloner, parser, buildsUsecase, logger)
 		scheduler = service.NewScheduler(add, remove, poller, repositoriesUsecase, logger)
 
 		handler = transport.NewHandler(cfg.StaticRootPath, repositoriesUsecase, buildsUsecase, logsUsecase)
 	)
 
-	// Scheduler & Poller
+	// Scheduler & Poller & Runner
 	ctx, cancel := context.WithCancel(context.Background())
 	if err != nil {
 		logger.Fatal(err)
@@ -93,6 +93,7 @@ func main() {
 
 	go scheduler.Start(ctx)
 	go poller.Start(ctx)
+	go runner.Start(ctx)
 
 	// HTTP Server
 	srv := &http.Server{

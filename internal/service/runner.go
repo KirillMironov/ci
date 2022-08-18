@@ -4,47 +4,82 @@ import (
 	"bytes"
 	"context"
 	"github.com/KirillMironov/ci/internal/domain"
+	"github.com/KirillMironov/ci/pkg/logger"
 	"io"
-	"os"
 )
 
-// Runner used to execute pipeline steps.
+// Runner used to execute pipeline.
 type Runner struct {
-	executor executor
+	run           <-chan RunRequest
+	executor      executor
+	buildsUsecase domain.BuildsUsecase
+	logsUsecase   domain.LogsUsecase
+	logger        logger.Logger
 }
 
-type executor interface {
-	ExecuteStep(ctx context.Context, step domain.Step, srcCodeArchive io.Reader) (logs io.ReadCloser, err error)
+type (
+	RunRequest struct {
+		repoId      string
+		commit      domain.Commit
+		pipeline    domain.Pipeline
+		srcCodePath string
+	}
+	executor interface {
+		ExecuteStep(ctx context.Context, step domain.Step, srcCodePath string) (logs io.ReadCloser, err error)
+	}
+)
+
+func NewRunner(run <-chan RunRequest, executor executor, bu domain.BuildsUsecase, lu domain.LogsUsecase,
+	logger logger.Logger) *Runner {
+	return &Runner{
+		run:           run,
+		executor:      executor,
+		buildsUsecase: bu,
+		logsUsecase:   lu,
+		logger:        logger,
+	}
 }
 
-func NewRunner(executor executor) *Runner {
-	return &Runner{executor: executor}
-}
+// Start listens on run channel and executes pipeline steps.
+func (r Runner) Start(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			r.logger.Infof("runner stopped: %v", ctx.Err())
+			return
+		case req := <-r.run:
+			var build = domain.Build{Commit: req.commit}
+			var logsBuf bytes.Buffer
 
-func (r Runner) Run(ctx context.Context, pipeline domain.Pipeline, srcCodeArchivePath string) (logs []byte, err error) {
-	var buf bytes.Buffer
+			for _, step := range req.pipeline.Steps {
+				err := func() error {
+					stepLogs, err := r.executor.ExecuteStep(ctx, step, req.srcCodePath)
+					if err != nil {
+						return err
+					}
+					defer stepLogs.Close()
 
-	for _, step := range pipeline.Steps {
-		err = func() error {
-			archive, err := os.Open(srcCodeArchivePath)
-			if err != nil {
-				return err
+					_, err = io.Copy(&logsBuf, stepLogs)
+					return err
+				}()
+				if err != nil {
+					build.Status = domain.Failure
+					break
+				}
 			}
-			defer archive.Close()
 
-			stepLogs, err := r.executor.ExecuteStep(ctx, step, archive)
+			logId, err := r.logsUsecase.Create(ctx, domain.Log{Data: logsBuf.Bytes()})
 			if err != nil {
-				return err
+				r.logger.Errorf("failed to create log: %v", err)
+				return
 			}
-			defer stepLogs.Close()
 
-			_, err = io.Copy(&buf, stepLogs)
-			return err
-		}()
-		if err != nil {
-			return nil, err
+			build.LogId = logId
+
+			err = r.buildsUsecase.Create(ctx, build, req.repoId)
+			if err != nil {
+				r.logger.Errorf("failed to create build: %v", err)
+			}
 		}
 	}
-
-	return buf.Bytes(), nil
 }

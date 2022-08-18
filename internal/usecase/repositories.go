@@ -10,8 +10,8 @@ import (
 
 type Repositories struct {
 	storage repositoriesStorage
-	add     chan domain.Repository
-	remove  chan string
+	add     chan<- domain.Repository
+	remove  chan<- string
 }
 
 type repositoriesStorage interface {
@@ -22,7 +22,7 @@ type repositoriesStorage interface {
 	GetByURL(ctx context.Context, url string) (domain.Repository, error)
 }
 
-func NewRepositories(storage repositoriesStorage, add chan domain.Repository, remove chan string) *Repositories {
+func NewRepositories(storage repositoriesStorage, add chan<- domain.Repository, remove chan<- string) *Repositories {
 	return &Repositories{
 		storage: storage,
 		add:     add,
