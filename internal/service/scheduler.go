@@ -9,10 +9,9 @@ import (
 
 // Scheduler used to schedule repositories polling.
 type Scheduler struct {
-	add    chan domain.Repository
-	remove <-chan string
-	// active used to cancel a repository polling if it's already running.
-	active              map[string]context.CancelFunc
+	add                 chan domain.Repository
+	remove              <-chan string
+	activePolling       map[string]context.CancelFunc
 	once                sync.Once
 	poller              poller
 	repositoriesUsecase repositoriesUsecase
@@ -24,7 +23,7 @@ type (
 		AddRepository(context.Context, domain.Repository)
 	}
 	repositoriesUsecase interface {
-		GetAll(context.Context) ([]domain.Repository, error)
+		GetAll() ([]domain.Repository, error)
 	}
 )
 
@@ -33,7 +32,7 @@ func NewScheduler(add chan domain.Repository, remove <-chan string, poller polle
 	return &Scheduler{
 		add:                 add,
 		remove:              remove,
-		active:              make(map[string]context.CancelFunc),
+		activePolling:       make(map[string]context.CancelFunc),
 		poller:              poller,
 		repositoriesUsecase: ru,
 		logger:              logger,
@@ -44,9 +43,9 @@ func NewScheduler(add chan domain.Repository, remove <-chan string, poller polle
 func (s *Scheduler) Start(ctx context.Context) {
 	s.once.Do(func() {
 		go func() {
-			repos, err := s.repositoriesUsecase.GetAll(context.Background())
+			repos, err := s.repositoriesUsecase.GetAll()
 			if err != nil {
-				s.logger.Errorf("failed to get saved repositories: %v", err)
+				s.logger.Error(err)
 				return
 			}
 
@@ -63,12 +62,12 @@ func (s *Scheduler) Start(ctx context.Context) {
 			return
 		case repo := <-s.add:
 			pollCtx, cancel := context.WithCancel(ctx)
-			s.active[repo.Id] = cancel
+			s.activePolling[repo.Id] = cancel
 			s.poller.AddRepository(pollCtx, repo)
 		case id := <-s.remove:
-			if cancel, ok := s.active[id]; ok {
+			if cancel, ok := s.activePolling[id]; ok {
 				cancel()
-				delete(s.active, id)
+				delete(s.activePolling, id)
 			}
 		}
 	}

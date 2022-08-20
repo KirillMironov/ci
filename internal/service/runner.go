@@ -48,7 +48,10 @@ func (r Runner) Start(ctx context.Context) {
 			r.logger.Infof("runner stopped: %v", ctx.Err())
 			return
 		case req := <-r.run:
-			var build = domain.Build{Commit: req.commit}
+			var build = domain.Build{
+				RepoId: req.repoId,
+				Commit: req.commit,
+			}
 			var logsBuf bytes.Buffer
 
 			for _, step := range req.pipeline.Steps {
@@ -68,17 +71,11 @@ func (r Runner) Start(ctx context.Context) {
 				}
 			}
 
-			logId, err := r.logsUsecase.Create(ctx, domain.Log{Data: logsBuf.Bytes()})
-			if err != nil {
-				r.logger.Errorf("failed to create log: %v", err)
-				return
-			}
+			build.Log = domain.Log{Data: logsBuf.Bytes()}
 
-			build.LogId = logId
-
-			err = r.buildsUsecase.Create(ctx, build, req.repoId)
+			err := r.buildsUsecase.Create(build)
 			if err != nil {
-				r.logger.Errorf("failed to create build: %v", err)
+				r.logger.Error(err)
 			}
 		}
 	}

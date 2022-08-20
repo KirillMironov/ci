@@ -1,7 +1,6 @@
 package usecase
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"github.com/KirillMironov/ci/internal/domain"
@@ -15,11 +14,11 @@ type Repositories struct {
 }
 
 type repositoriesStorage interface {
-	Create(context.Context, domain.Repository) error
-	Delete(ctx context.Context, id string) error
-	GetAll(context.Context) ([]domain.Repository, error)
-	GetById(ctx context.Context, id string) (domain.Repository, error)
-	GetByURL(ctx context.Context, url string) (domain.Repository, error)
+	Create(domain.Repository) error
+	Delete(id string) error
+	GetAll() ([]domain.Repository, error)
+	GetById(id string) (domain.Repository, error)
+	GetByURL(url string) (domain.Repository, error)
 }
 
 func NewRepositories(storage repositoriesStorage, add chan<- domain.Repository, remove chan<- string) *Repositories {
@@ -30,15 +29,15 @@ func NewRepositories(storage repositoriesStorage, add chan<- domain.Repository, 
 	}
 }
 
-func (r Repositories) Add(ctx context.Context, repo domain.Repository) error {
-	_, err := r.storage.GetByURL(ctx, repo.URL)
+func (r Repositories) Add(repo domain.Repository) error {
+	_, err := r.storage.GetByURL(repo.URL)
 	if !errors.Is(err, domain.ErrNotFound) {
 		return fmt.Errorf("repository with url %q already exists", repo.URL)
 	}
 
 	repo.Id = xid.New().String()
 
-	err = r.storage.Create(ctx, repo)
+	err = r.storage.Create(repo)
 	if err != nil {
 		return fmt.Errorf("failed to create repository: %w", err)
 	}
@@ -47,10 +46,10 @@ func (r Repositories) Add(ctx context.Context, repo domain.Repository) error {
 	return nil
 }
 
-func (r Repositories) Delete(ctx context.Context, id string) error {
+func (r Repositories) Delete(id string) error {
 	r.remove <- id
 
-	err := r.storage.Delete(ctx, id)
+	err := r.storage.Delete(id)
 	if err != nil {
 		return fmt.Errorf("failed to delete repository: %w", err)
 	}
@@ -58,28 +57,28 @@ func (r Repositories) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-func (r Repositories) GetAll(ctx context.Context) ([]domain.Repository, error) {
-	repos, err := r.storage.GetAll(ctx)
+func (r Repositories) GetAll() ([]domain.Repository, error) {
+	repos, err := r.storage.GetAll()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get repositories: %w", err)
+		return nil, fmt.Errorf("failed to get all repositories: %w", err)
 	}
 
 	return repos, nil
 }
 
-func (r Repositories) GetById(ctx context.Context, id string) (domain.Repository, error) {
-	repo, err := r.storage.GetById(ctx, id)
+func (r Repositories) GetById(id string) (domain.Repository, error) {
+	repo, err := r.storage.GetById(id)
 	if err != nil {
-		return domain.Repository{}, fmt.Errorf("failed to get repository: %w", err)
+		return domain.Repository{}, fmt.Errorf("failed to get repository by id: %w", err)
 	}
 
 	return repo, nil
 }
 
-func (r Repositories) GetByURL(ctx context.Context, url string) (domain.Repository, error) {
-	repo, err := r.storage.GetByURL(ctx, url)
+func (r Repositories) GetByURL(url string) (domain.Repository, error) {
+	repo, err := r.storage.GetByURL(url)
 	if err != nil {
-		return domain.Repository{}, fmt.Errorf("failed to get repository: %w", err)
+		return domain.Repository{}, fmt.Errorf("failed to get repository by url: %w", err)
 	}
 
 	return repo, nil

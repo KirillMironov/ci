@@ -1,97 +1,87 @@
 package storage
 
 import (
-	"bytes"
-	"context"
-	"encoding/gob"
+	"database/sql"
+	"errors"
 	"github.com/KirillMironov/ci/internal/domain"
-	"go.etcd.io/bbolt"
+	"github.com/jmoiron/sqlx"
+	"time"
 )
 
-// Repositories used to store domain.Repository in a BoltDB bucket.
 type Repositories struct {
-	db     *bbolt.DB
-	bucket string
+	db *sqlx.DB
 }
 
-// NewRepositories creates a new bucket for repositories with a given name if it doesn't exist.
-func NewRepositories(db *bbolt.DB, bucket string) (*Repositories, error) {
-	err := db.Update(func(tx *bbolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte(bucket))
-		return err
-	})
-	return &Repositories{
-		db:     db,
-		bucket: bucket,
-	}, err
+func NewRepositories(db *sqlx.DB) *Repositories {
+	return &Repositories{db: db}
 }
 
-func (r Repositories) Create(_ context.Context, repo domain.Repository) error {
-	var buf bytes.Buffer
-	var encoder = gob.NewEncoder(&buf)
+func (r Repositories) Create(repo domain.Repository) error {
+	var query = "INSERT INTO repositories (id, url, branch, polling_interval, created_at) VALUES ($1, $2, $3, $4, $5)"
 
-	return r.db.Update(func(tx *bbolt.Tx) error {
-		bucket := tx.Bucket([]byte(r.bucket))
-		err := encoder.Encode(repo)
+	_, err := r.db.Exec(query, repo.Id, repo.URL, repo.Branch, repo.PollingInterval, time.Now())
+	return err
+}
+
+func (r Repositories) Delete(id string) error {
+	var query = "DELETE FROM repositories WHERE id = $1"
+
+	_, err := r.db.Exec(query, id)
+	return err
+}
+
+func (r Repositories) GetAll() (repos []domain.Repository, err error) {
+	var query = "SELECT id, url, branch, polling_interval, created_at FROM repositories"
+
+	rows, err := r.db.Queryx(query)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var repo domain.Repository
+		err = rows.Scan(&repo.Id, &repo.URL, &repo.Branch, &repo.PollingInterval, &repo.CreatedAt)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		return bucket.Put([]byte(repo.Id), buf.Bytes())
-	})
+		repos = append(repos, repo)
+	}
+
+	return repos, rows.Err()
 }
 
-func (r Repositories) Delete(_ context.Context, id string) error {
-	return r.db.Update(func(tx *bbolt.Tx) error {
-		bucket := tx.Bucket([]byte(r.bucket))
-		return bucket.Delete([]byte(id))
-	})
-}
+func (r Repositories) GetById(id string) (repo domain.Repository, err error) {
+	var query = "SELECT id, url, branch, polling_interval, created_at FROM repositories WHERE id = $1"
 
-func (r Repositories) GetAll(_ context.Context) (repos []domain.Repository, err error) {
-	err = r.db.View(func(tx *bbolt.Tx) error {
-		bucket := tx.Bucket([]byte(r.bucket))
-		return bucket.ForEach(func(k, v []byte) error {
-			var repo domain.Repository
-			var decoder = gob.NewDecoder(bytes.NewReader(v))
-			if err = decoder.Decode(&repo); err != nil {
-				return err
-			}
-			repos = append(repos, repo)
-			return nil
-		})
-	})
-	return repos, err
-}
+	row := r.db.QueryRowx(query, id)
 
-func (r Repositories) GetById(_ context.Context, id string) (repo domain.Repository, err error) {
-	err = r.db.View(func(tx *bbolt.Tx) error {
-		bucket := tx.Bucket([]byte(r.bucket))
-		v := bucket.Get([]byte(id))
-		if v == nil {
-			return domain.ErrNotFound
+	err = row.Scan(&repo.Id, &repo.URL, &repo.Branch, &repo.PollingInterval, &repo.CreatedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return domain.Repository{}, domain.ErrNotFound
 		}
-		decoder := gob.NewDecoder(bytes.NewReader(v))
-		return decoder.Decode(&repo)
-	})
-	return repo, err
+		return domain.Repository{}, err
+	}
+
+	return repo, nil
 }
 
-func (r Repositories) GetByURL(_ context.Context, url string) (repo domain.Repository, err error) {
-	err = r.db.View(func(tx *bbolt.Tx) error {
-		b := tx.Bucket([]byte(r.bucket))
-		c := b.Cursor()
-		for k, v := c.First(); k != nil; k, v = c.Next() {
-			var tempRepo domain.Repository
-			decoder := gob.NewDecoder(bytes.NewReader(v))
-			if err = decoder.Decode(&tempRepo); err != nil {
-				return err
-			}
-			if tempRepo.URL == url {
-				repo = tempRepo
-				return nil
-			}
+func (r Repositories) GetByURL(url string) (repo domain.Repository, err error) {
+	var query = "SELECT id, url, branch, polling_interval, created_at FROM repositories WHERE url = $1"
+
+	row := r.db.QueryRowx(query, url)
+
+	err = row.Scan(&repo.Id, &repo.URL, &repo.Branch, &repo.PollingInterval, &repo.CreatedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return domain.Repository{}, domain.ErrNotFound
 		}
-		return domain.ErrNotFound
-	})
-	return repo, err
+		return domain.Repository{}, err
+	}
+
+	return repo, nil
 }

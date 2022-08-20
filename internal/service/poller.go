@@ -58,9 +58,9 @@ func (p Poller) Start(ctx context.Context) {
 				continue
 			}
 
-			builds, err := p.buildsUsecase.GetAllByRepoId(context.Background(), repo.Id)
+			builds, err := p.buildsUsecase.GetAllByRepoId(repo.Id)
 			if err != nil && !errors.Is(err, domain.ErrNotFound) {
-				p.logger.Errorf("failed to get builds: %v", err)
+				p.logger.Error(err)
 				continue
 			}
 			if len(builds) > 0 && latestHash == builds[len(builds)-1].Commit.Hash {

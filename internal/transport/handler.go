@@ -62,7 +62,7 @@ func (h Handler) Routes() *echo.Echo {
 		}
 		logs := api.Group("/logs")
 		{
-			logs.GET("/:logId", h.getLogById)
+			logs.GET("/:buildId", h.getLogById)
 		}
 	}
 

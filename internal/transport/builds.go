@@ -8,7 +8,7 @@ import (
 )
 
 func (h Handler) getBuild(c echo.Context) error {
-	build, err := h.buildsUsecase.GetById(c.Request().Context(), c.Param("buildId"), c.Param("repoId"))
+	build, err := h.buildsUsecase.GetById(c.Param("buildId"))
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, err)
@@ -20,7 +20,7 @@ func (h Handler) getBuild(c echo.Context) error {
 }
 
 func (h Handler) getBuildsByRepositoryId(c echo.Context) error {
-	builds, err := h.buildsUsecase.GetAllByRepoId(c.Request().Context(), c.Param("repoId"))
+	builds, err := h.buildsUsecase.GetAllByRepoId(c.Param("repoId"))
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, err)

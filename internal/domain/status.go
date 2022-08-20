@@ -4,6 +4,7 @@ const (
 	Success Status = iota
 	Failure
 	Skipped
+	InProgress
 )
 
 type Status uint8

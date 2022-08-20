@@ -20,7 +20,7 @@ func (h Handler) addRepository(c echo.Context) error {
 		return err
 	}
 
-	err = h.repositoriesUsecase.Add(c.Request().Context(), domain.Repository{
+	err = h.repositoriesUsecase.Add(domain.Repository{
 		URL:             form.URL,
 		Branch:          form.Branch,
 		PollingInterval: form.PollingInterval,
@@ -42,7 +42,7 @@ func (h Handler) deleteRepository(c echo.Context) error {
 		return err
 	}
 
-	err = h.repositoriesUsecase.Delete(c.Request().Context(), form.Id)
+	err = h.repositoriesUsecase.Delete(form.Id)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err)
 	}
@@ -51,7 +51,7 @@ func (h Handler) deleteRepository(c echo.Context) error {
 }
 
 func (h Handler) getRepositories(c echo.Context) error {
-	repositories, err := h.repositoriesUsecase.GetAll(c.Request().Context())
+	repositories, err := h.repositoriesUsecase.GetAll()
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, err)
@@ -63,7 +63,7 @@ func (h Handler) getRepositories(c echo.Context) error {
 }
 
 func (h Handler) getRepositoryById(c echo.Context) error {
-	repository, err := h.repositoriesUsecase.GetById(c.Request().Context(), c.Param("repoId"))
+	repository, err := h.repositoriesUsecase.GetById(c.Param("repoId"))
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, err)

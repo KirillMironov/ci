@@ -1,8 +1,8 @@
 package domain
 
 import (
-	"context"
 	"github.com/KirillMironov/ci/pkg/duration"
+	"time"
 )
 
 type Repository struct {
@@ -10,12 +10,13 @@ type Repository struct {
 	URL             string            `json:"url"`
 	Branch          string            `json:"branch"`
 	PollingInterval duration.Duration `json:"polling_interval"`
+	CreatedAt       time.Time         `json:"created_at"`
 }
 
 type RepositoriesUsecase interface {
-	Add(context.Context, Repository) error
-	Delete(ctx context.Context, id string) error
-	GetAll(context.Context) ([]Repository, error)
-	GetById(ctx context.Context, id string) (Repository, error)
-	GetByURL(ctx context.Context, url string) (Repository, error)
+	Add(Repository) error
+	Delete(id string) error
+	GetAll() ([]Repository, error)
+	GetById(id string) (Repository, error)
+	GetByURL(url string) (Repository, error)
 }

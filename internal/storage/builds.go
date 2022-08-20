@@ -1,92 +1,97 @@
 package storage
 
 import (
-	"bytes"
-	"context"
-	"encoding/gob"
+	"database/sql"
+	"errors"
 	"github.com/KirillMironov/ci/internal/domain"
-	"go.etcd.io/bbolt"
+	"github.com/jmoiron/sqlx"
+	"time"
 )
 
-// Builds used to store domain.Build in a BoltDB bucket.
 type Builds struct {
-	db     *bbolt.DB
-	bucket string
+	db *sqlx.DB
 }
 
-// NewBuilds creates a new bucket for builds with a given name if it doesn't exist.
-func NewBuilds(db *bbolt.DB, bucket string) (*Builds, error) {
-	err := db.Update(func(tx *bbolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte(bucket))
+func NewBuilds(db *sqlx.DB) *Builds {
+	return &Builds{db: db}
+}
+
+func (b Builds) Create(build domain.Build) error {
+	var (
+		buildQuery  = "INSERT INTO builds (id, repo_id, status, created_at) VALUES ($1, $2, $3, $4)"
+		commitQuery = "INSERT INTO commits (build_id, hash) VALUES ($1, $2)"
+		logQuery    = "INSERT INTO logs (build_id, data) VALUES ($1, $2)"
+	)
+
+	tx, err := b.db.Beginx()
+	if err != nil {
 		return err
-	})
-	return &Builds{
-		db:     db,
-		bucket: bucket,
-	}, err
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec(buildQuery, build.Id, build.RepoId, build.Status, time.Now())
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(commitQuery, build.Id, build.Commit.Hash)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(logQuery, build.Id, build.Log.Data)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
 
-func (b Builds) Create(_ context.Context, build domain.Build, repoId string) error {
-	var buf bytes.Buffer
-	var encoder = gob.NewEncoder(&buf)
+func (b Builds) Delete(id string) error {
+	var query = "DELETE FROM builds WHERE id = $1"
 
-	return b.db.Update(func(tx *bbolt.Tx) error {
-		bucket := tx.Bucket([]byte(b.bucket))
-		nestedBucket, err := bucket.CreateBucketIfNotExists([]byte(repoId))
+	_, err := b.db.Exec(query, id)
+	return err
+}
+
+func (b Builds) GetAllByRepoId(repoId string) (builds []domain.Build, err error) {
+	var query = `SELECT id, repo_id, status, created_at, c.hash FROM builds b 
+    	JOIN commits c ON b.id = c.build_id WHERE b.repo_id = $1`
+
+	rows, err := b.db.Queryx(query, repoId)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var build domain.Build
+		err = rows.Scan(&build.Id, &build.RepoId, &build.Status, &build.CreatedAt, &build.Commit.Hash)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		if err = encoder.Encode(build); err != nil {
-			return err
-		}
-		return nestedBucket.Put([]byte(build.Id), buf.Bytes())
-	})
+		builds = append(builds, build)
+	}
+
+	return builds, rows.Err()
 }
 
-func (b Builds) Delete(_ context.Context, id, repoId string) error {
-	return b.db.Update(func(tx *bbolt.Tx) error {
-		bucket := tx.Bucket([]byte(b.bucket))
-		nestedBucket := bucket.Bucket([]byte(repoId))
-		if nestedBucket == nil {
-			return domain.ErrNotFound
-		}
-		return nestedBucket.Delete([]byte(id))
-	})
-}
+func (b Builds) GetById(id string) (build domain.Build, err error) {
+	var query = `SELECT id, repo_id, status, created_at, c.hash FROM builds b 
+    	JOIN commits c ON b.id = c.build_id WHERE b.id = $1`
 
-func (b Builds) GetAllByRepoId(_ context.Context, repoId string) (builds []domain.Build, err error) {
-	err = b.db.View(func(tx *bbolt.Tx) error {
-		bucket := tx.Bucket([]byte(b.bucket))
-		nestedBucket := bucket.Bucket([]byte(repoId))
-		if nestedBucket == nil {
-			return domain.ErrNotFound
-		}
-		return nestedBucket.ForEach(func(k, v []byte) error {
-			var build domain.Build
-			var decoder = gob.NewDecoder(bytes.NewReader(v))
-			if err = decoder.Decode(&build); err != nil {
-				return err
-			}
-			builds = append(builds, build)
-			return nil
-		})
-	})
-	return builds, err
-}
+	row := b.db.QueryRowx(query, id)
 
-func (b Builds) GetById(_ context.Context, id, repoId string) (build domain.Build, err error) {
-	err = b.db.View(func(tx *bbolt.Tx) error {
-		bucket := tx.Bucket([]byte(b.bucket))
-		nestedBucket := bucket.Bucket([]byte(repoId))
-		if nestedBucket == nil {
-			return domain.ErrNotFound
+	err = row.Scan(&build.Id, &build.RepoId, &build.Status, &build.CreatedAt, &build.Commit.Hash)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return domain.Build{}, domain.ErrNotFound
 		}
-		v := nestedBucket.Get([]byte(id))
-		if v == nil {
-			return domain.ErrNotFound
-		}
-		decoder := gob.NewDecoder(bytes.NewReader(v))
-		return decoder.Decode(&build)
-	})
-	return build, err
+		return domain.Build{}, err
+	}
+
+	return build, nil
 }

@@ -8,7 +8,7 @@ import (
 )
 
 func (h Handler) getLogById(c echo.Context) error {
-	log, err := h.logsUsecase.GetById(c.Request().Context(), c.Param("logId"))
+	log, err := h.logsUsecase.GetByBuildId(c.Param("buildId"))
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, err)

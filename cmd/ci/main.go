@@ -10,8 +10,9 @@ import (
 	"github.com/KirillMironov/ci/internal/transport"
 	"github.com/KirillMironov/ci/internal/usecase"
 	"github.com/docker/docker/client"
+	"github.com/jmoiron/sqlx"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/sirupsen/logrus"
-	"go.etcd.io/bbolt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -41,33 +42,27 @@ func main() {
 	}
 	defer cli.Close()
 
-	// BoltDB
-	db, err := bbolt.Open(cfg.BoltDBPath, 0600, &bbolt.Options{Timeout: time.Second})
+	// SQLite
+	db, err := sqlx.Connect("sqlite3", cfg.SQLitePath)
 	if err != nil {
 		logger.Fatal(err)
 	}
 	defer db.Close()
 
+	_, err = db.Exec(config.Schema)
+	if err != nil {
+		logger.Fatal(err)
+	}
+
 	// App
-	repositoriesStorage, err := storage.NewRepositories(db, "repositories")
-	if err != nil {
-		logger.Fatal(err)
-	}
-
-	buildsStorage, err := storage.NewBuilds(db, "builds")
-	if err != nil {
-		logger.Fatal(err)
-	}
-
-	logsStorage, err := storage.NewLogs(db, "logs")
-	if err != nil {
-		logger.Fatal(err)
-	}
-
 	var (
 		add    = make(chan domain.Repository)
 		remove = make(chan string)
 		run    = make(chan service.RunRequest)
+
+		repositoriesStorage = storage.NewRepositories(db)
+		buildsStorage       = storage.NewBuilds(db)
+		logsStorage         = storage.NewLogs(db)
 
 		repositoriesUsecase = usecase.NewRepositories(repositoriesStorage, add, remove)
 		buildsUsecase       = usecase.NewBuilds(buildsStorage)

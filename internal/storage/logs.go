@@ -1,53 +1,32 @@
 package storage
 
 import (
-	"bytes"
-	"context"
-	"encoding/gob"
+	"database/sql"
+	"errors"
 	"github.com/KirillMironov/ci/internal/domain"
-	"go.etcd.io/bbolt"
+	"github.com/jmoiron/sqlx"
 )
 
-// Logs used to store domain.Log in a boltdb bucket.
 type Logs struct {
-	db     *bbolt.DB
-	bucket string
+	db *sqlx.DB
 }
 
-// NewLogs creates a new bucket for logs with a given name if it doesn't exist.
-func NewLogs(db *bbolt.DB, bucket string) (*Logs, error) {
-	err := db.Update(func(tx *bbolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte(bucket))
-		return err
-	})
-	return &Logs{
-		db:     db,
-		bucket: bucket,
-	}, err
+func NewLogs(db *sqlx.DB) *Logs {
+	return &Logs{db: db}
 }
 
-func (l Logs) Create(_ context.Context, log domain.Log) error {
-	var buf bytes.Buffer
-	var encoder = gob.NewEncoder(&buf)
+func (l Logs) GetByBuildId(buildId string) (log domain.Log, err error) {
+	var query = "SELECT data FROM logs WHERE build_id = $1"
 
-	return l.db.Update(func(tx *bbolt.Tx) error {
-		bucket := tx.Bucket([]byte(l.bucket))
-		if err := encoder.Encode(log); err != nil {
-			return err
+	row := l.db.QueryRow(query, buildId)
+
+	err = row.Scan(&log.Data)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return domain.Log{}, domain.ErrNotFound
 		}
-		return bucket.Put([]byte(log.Id), buf.Bytes())
-	})
-}
+		return domain.Log{}, err
+	}
 
-func (l Logs) GetById(_ context.Context, id string) (log domain.Log, err error) {
-	err = l.db.View(func(tx *bbolt.Tx) error {
-		bucket := tx.Bucket([]byte(l.bucket))
-		v := bucket.Get([]byte(id))
-		if v == nil {
-			return domain.ErrNotFound
-		}
-		decoder := gob.NewDecoder(bytes.NewReader(v))
-		return decoder.Decode(&log)
-	})
-	return log, err
+	return log, nil
 }
