@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS builds
     created_at TIMESTAMP NOT NULL,
     CONSTRAINT builds_pk PRIMARY KEY (id),
     CONSTRAINT builds_repository_id_fk FOREIGN KEY (repo_id) REFERENCES repositories (id) ON DELETE CASCADE,
-	CONSTRAINT builds_status_check CHECK (status IN (0, 1, 2, 4))
+    CONSTRAINT builds_status_check CHECK (status IN (0, 1, 2, 3))
 );
 
 CREATE TABLE IF NOT EXISTS commits
