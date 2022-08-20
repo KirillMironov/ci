@@ -27,9 +27,9 @@ CREATE TABLE IF NOT EXISTS builds
 
 CREATE TABLE IF NOT EXISTS commits
 (
-	build_id VARCHAR(20),
-	hash VARCHAR(40),
-   	CONSTRAINT commits_build_id_fk FOREIGN KEY (build_id) REFERENCES builds (id) ON DELETE CASCADE
+    build_id VARCHAR(20),
+    hash VARCHAR(40),
+    CONSTRAINT commits_build_id_fk FOREIGN KEY (build_id) REFERENCES builds (id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS logs
