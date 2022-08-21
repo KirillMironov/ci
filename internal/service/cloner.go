@@ -49,7 +49,7 @@ func (Cloner) GetLatestCommitHash(repo domain.Repository) (string, error) {
 	return "", ErrBranchNotFound
 }
 
-// CloneRepository clones a repository and returns the path to the compressed source code archive.
+// CloneRepository clones a repository and returns the local repository path.
 func (c Cloner) CloneRepository(repo domain.Repository, targetHash string) (srcCodePath string, err error) {
 	repository, srcCodePath, err := c.openOrCloneRepository(repo)
 	if err != nil {
