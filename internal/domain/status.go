@@ -10,5 +10,5 @@ const (
 type Status uint8
 
 func (s Status) String() string {
-	return [...]string{"success", "failure", "skipped"}[s]
+	return [...]string{"success", "failure", "skipped", "in progress"}[s]
 }
