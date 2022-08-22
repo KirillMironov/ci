@@ -19,8 +19,7 @@ type Runner struct {
 
 type (
 	RunRequest struct {
-		repoId      string
-		commit      domain.Commit
+		build       domain.Build
 		pipeline    domain.Pipeline
 		srcCodePath string
 	}
@@ -48,11 +47,10 @@ func (r Runner) Start(ctx context.Context) {
 			r.logger.Infof("runner stopped: %v", ctx.Err())
 			return
 		case req := <-r.run:
-			var build = domain.Build{
-				RepoId: req.repoId,
-				Commit: req.commit,
-			}
+			var build = req.build
 			var logsBuf bytes.Buffer
+
+			build.Status = domain.Success
 
 			for _, step := range req.pipeline.Steps {
 				err := func() error {
@@ -73,7 +71,7 @@ func (r Runner) Start(ctx context.Context) {
 
 			build.Log = domain.Log{Data: logsBuf.Bytes()}
 
-			err := r.buildsUsecase.Create(build)
+			err := r.buildsUsecase.Update(build)
 			if err != nil {
 				r.logger.Error(err)
 			}

@@ -20,7 +20,6 @@ func (b Builds) Create(build domain.Build) error {
 	var (
 		buildQuery  = "INSERT INTO builds (id, repo_id, status, created_at) VALUES ($1, $2, $3, $4)"
 		commitQuery = "INSERT INTO commits (build_id, hash) VALUES ($1, $2)"
-		logQuery    = "INSERT INTO logs (build_id, data) VALUES ($1, $2)"
 	)
 
 	tx, err := b.db.Beginx()
@@ -35,6 +34,26 @@ func (b Builds) Create(build domain.Build) error {
 	}
 
 	_, err = tx.Exec(commitQuery, build.Id, build.Commit.Hash)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func (b Builds) Update(build domain.Build) error {
+	var (
+		buildQuery = "UPDATE builds SET status = $1 WHERE id = $2"
+		logQuery   = "INSERT INTO logs (build_id, data) VALUES ($1, $2)"
+	)
+
+	tx, err := b.db.Beginx()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec(buildQuery, build.Status, build.Id)
 	if err != nil {
 		return err
 	}

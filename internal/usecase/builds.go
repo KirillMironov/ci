@@ -12,6 +12,7 @@ type Builds struct {
 
 type buildsStorage interface {
 	Create(domain.Build) error
+	Update(domain.Build) error
 	Delete(id string) error
 	GetAllByRepoId(repoId string) ([]domain.Build, error)
 	GetById(id string) (domain.Build, error)
@@ -21,12 +22,21 @@ func NewBuilds(storage buildsStorage) *Builds {
 	return &Builds{storage: storage}
 }
 
-func (b Builds) Create(build domain.Build) error {
+func (b Builds) Create(build domain.Build) (id string, err error) {
 	build.Id = xid.New().String()
 
-	err := b.storage.Create(build)
+	err = b.storage.Create(build)
 	if err != nil {
-		return fmt.Errorf("failed to create build: %w", err)
+		return "", fmt.Errorf("failed to create build: %w", err)
+	}
+
+	return build.Id, nil
+}
+
+func (b Builds) Update(build domain.Build) error {
+	err := b.storage.Update(build)
+	if err != nil {
+		return fmt.Errorf("failed to update build: %w", err)
 	}
 
 	return nil

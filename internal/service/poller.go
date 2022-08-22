@@ -67,6 +67,18 @@ func (p Poller) Start(ctx context.Context) {
 				continue
 			}
 
+			var build = domain.Build{
+				RepoId: repo.Id,
+				Commit: domain.Commit{Hash: latestHash},
+				Status: domain.InProgress,
+			}
+
+			build.Id, err = p.buildsUsecase.Create(build)
+			if err != nil {
+				p.logger.Error(err)
+				continue
+			}
+
 			srcCodePath, err := p.cloner.CloneRepository(repo, latestHash)
 			if err != nil {
 				p.logger.Errorf("failed to clone repository: %v", err)
@@ -86,8 +98,7 @@ func (p Poller) Start(ctx context.Context) {
 			}
 
 			p.run <- RunRequest{
-				repoId:      repo.Id,
-				commit:      domain.Commit{Hash: latestHash},
+				build:       build,
 				pipeline:    pipeline,
 				srcCodePath: srcCodePath,
 			}
