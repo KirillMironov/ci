@@ -1,6 +1,3 @@
-package config
-
-const Schema = `
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS repositories
@@ -38,4 +35,3 @@ CREATE TABLE IF NOT EXISTS logs
     data VARCHAR,
     CONSTRAINT logs_build_id_fk FOREIGN KEY (build_id) REFERENCES builds (id) ON DELETE CASCADE
 );
-`

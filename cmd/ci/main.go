@@ -43,13 +43,13 @@ func main() {
 	defer cli.Close()
 
 	// SQLite
-	db, err := sqlx.Connect("sqlite3", cfg.SQLitePath)
+	db, err := sqlx.Connect("sqlite3", cfg.SQLite.Path)
 	if err != nil {
 		logger.Fatal(err)
 	}
 	defer db.Close()
 
-	_, err = db.Exec(config.Schema)
+	_, err = db.Exec(cfg.SQLite.Schema)
 	if err != nil {
 		logger.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func main() {
 		poller    = service.NewPoller(run, cfg.CIFilename, cloner, parser, buildsUsecase, logger)
 		scheduler = service.NewScheduler(add, remove, poller, repositoriesUsecase, logger)
 
-		handler = transport.NewHandler(cfg.StaticRootPath, repositoriesUsecase, buildsUsecase, logsUsecase)
+		handler = transport.NewHandler(cfg.StaticRootDir, repositoriesUsecase, buildsUsecase, logsUsecase)
 	)
 
 	// Scheduler & Poller & Runner

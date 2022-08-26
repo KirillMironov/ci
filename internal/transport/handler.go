@@ -10,16 +10,16 @@ import (
 
 // Handler used to handle HTTP requests.
 type Handler struct {
-	staticRootPath      string
+	staticRootDir       string
 	repositoriesUsecase domain.RepositoriesUsecase
 	buildsUsecase       domain.BuildsUsecase
 	logsUsecase         domain.LogsUsecase
 }
 
-func NewHandler(staticRootPath string, repositoriesUsecase domain.RepositoriesUsecase,
+func NewHandler(staticRootDir string, repositoriesUsecase domain.RepositoriesUsecase,
 	buildsUsecase domain.BuildsUsecase, logsUsecase domain.LogsUsecase) *Handler {
 	return &Handler{
-		staticRootPath:      staticRootPath,
+		staticRootDir:       staticRootDir,
 		repositoriesUsecase: repositoriesUsecase,
 		buildsUsecase:       buildsUsecase,
 		logsUsecase:         logsUsecase,
@@ -38,7 +38,7 @@ func (h Handler) Routes() *echo.Echo {
 			AllowMethods: []string{echo.GET, echo.POST, echo.DELETE, echo.OPTIONS},
 		}),
 		middleware.StaticWithConfig(middleware.StaticConfig{
-			Root:  h.staticRootPath,
+			Root:  h.staticRootDir,
 			HTML5: true,
 			Skipper: func(c echo.Context) bool {
 				return strings.HasPrefix(c.Request().URL.Path, "/api/")
