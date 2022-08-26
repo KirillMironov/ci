@@ -7,8 +7,8 @@ import (
 	"net/http"
 )
 
-func (h Handler) getBuild(c echo.Context) error {
-	build, err := h.buildsUsecase.GetById(c.Param("buildId"))
+func (h Handler) getBuildById(c echo.Context) error {
+	build, err := h.buildsStorage.GetById(c.Param("buildId"))
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, err)
@@ -19,8 +19,8 @@ func (h Handler) getBuild(c echo.Context) error {
 	return c.JSON(http.StatusOK, build)
 }
 
-func (h Handler) getBuildsByRepositoryId(c echo.Context) error {
-	builds, err := h.buildsUsecase.GetAllByRepoId(c.Param("repoId"))
+func (h Handler) getBuildsByRepoId(c echo.Context) error {
+	builds, err := h.buildsStorage.GetAllByRepoId(c.Param("repoId"))
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, err)

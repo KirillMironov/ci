@@ -20,19 +20,16 @@ func (h Handler) addRepository(c echo.Context) error {
 		return err
 	}
 
-	err = h.repositoriesUsecase.Add(domain.Repository{
+	h.scheduler.Add(domain.Repository{
 		URL:             form.URL,
 		Branch:          form.Branch,
 		PollingInterval: form.PollingInterval,
 	})
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err)
-	}
 
 	return c.NoContent(http.StatusCreated)
 }
 
-func (h Handler) deleteRepository(c echo.Context) error {
+func (h Handler) removeRepository(c echo.Context) error {
 	var form struct {
 		Id string `json:"id" validate:"required"`
 	}
@@ -42,16 +39,13 @@ func (h Handler) deleteRepository(c echo.Context) error {
 		return err
 	}
 
-	err = h.repositoriesUsecase.Delete(form.Id)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err)
-	}
+	h.scheduler.Remove(form.Id)
 
 	return c.NoContent(http.StatusNoContent)
 }
 
 func (h Handler) getRepositories(c echo.Context) error {
-	repositories, err := h.repositoriesUsecase.GetAll()
+	repositories, err := h.repositoriesStorage.GetAll()
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, err)
@@ -63,7 +57,7 @@ func (h Handler) getRepositories(c echo.Context) error {
 }
 
 func (h Handler) getRepositoryById(c echo.Context) error {
-	repository, err := h.repositoriesUsecase.GetById(c.Param("repoId"))
+	repository, err := h.repositoriesStorage.GetById(c.Param("repoId"))
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, err)

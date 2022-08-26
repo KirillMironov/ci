@@ -28,8 +28,8 @@ func (b Build) MarshalJSON() ([]byte, error) {
 	})
 }
 
-type BuildsUsecase interface {
-	Create(Build) (id string, err error)
+type BuildsStorage interface {
+	Create(Build) error
 	Update(Build) error
 	Delete(id string) error
 	GetAllByRepoId(repoId string) ([]Build, error)

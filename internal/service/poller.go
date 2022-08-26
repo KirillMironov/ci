@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/KirillMironov/ci/internal/domain"
 	"github.com/KirillMironov/ci/pkg/logger"
+	"github.com/rs/xid"
 	"os"
 	"path/filepath"
 	"time"
@@ -17,7 +18,7 @@ type Poller struct {
 	ciFilename    string
 	cloner        cloner
 	parser        parser
-	buildsUsecase domain.BuildsUsecase
+	buildsStorage domain.BuildsStorage
 	logger        logger.Logger
 }
 
@@ -31,7 +32,7 @@ type (
 	}
 )
 
-func NewPoller(run chan<- RunRequest, ciFilename string, cloner cloner, parser parser, bu domain.BuildsUsecase,
+func NewPoller(run chan<- RunRequest, ciFilename string, cloner cloner, parser parser, bs domain.BuildsStorage,
 	logger logger.Logger) *Poller {
 	return &Poller{
 		run:           run,
@@ -39,7 +40,7 @@ func NewPoller(run chan<- RunRequest, ciFilename string, cloner cloner, parser p
 		ciFilename:    ciFilename,
 		cloner:        cloner,
 		parser:        parser,
-		buildsUsecase: bu,
+		buildsStorage: bs,
 		logger:        logger,
 	}
 }
@@ -58,7 +59,7 @@ func (p Poller) Start(ctx context.Context) {
 				continue
 			}
 
-			builds, err := p.buildsUsecase.GetAllByRepoId(repo.Id)
+			builds, err := p.buildsStorage.GetAllByRepoId(repo.Id)
 			if err != nil && !errors.Is(err, domain.ErrNotFound) {
 				p.logger.Error(err)
 				continue
@@ -68,12 +69,13 @@ func (p Poller) Start(ctx context.Context) {
 			}
 
 			var build = domain.Build{
+				Id:     xid.New().String(),
 				RepoId: repo.Id,
 				Commit: domain.Commit{Hash: latestHash},
 				Status: domain.InProgress,
 			}
 
-			build.Id, err = p.buildsUsecase.Create(build)
+			err = p.buildsStorage.Create(build)
 			if err != nil {
 				p.logger.Error(err)
 				continue

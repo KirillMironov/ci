@@ -11,18 +11,25 @@ import (
 // Handler used to handle HTTP requests.
 type Handler struct {
 	staticRootDir       string
-	repositoriesUsecase domain.RepositoriesUsecase
-	buildsUsecase       domain.BuildsUsecase
-	logsUsecase         domain.LogsUsecase
+	scheduler           scheduler
+	repositoriesStorage domain.RepositoriesStorage
+	buildsStorage       domain.BuildsStorage
+	logsStorage         domain.LogsStorage
 }
 
-func NewHandler(staticRootDir string, repositoriesUsecase domain.RepositoriesUsecase,
-	buildsUsecase domain.BuildsUsecase, logsUsecase domain.LogsUsecase) *Handler {
+type scheduler interface {
+	Add(domain.Repository)
+	Remove(id string)
+}
+
+func NewHandler(staticRootDir string, s scheduler, rs domain.RepositoriesStorage, bs domain.BuildsStorage,
+	ls domain.LogsStorage) *Handler {
 	return &Handler{
 		staticRootDir:       staticRootDir,
-		repositoriesUsecase: repositoriesUsecase,
-		buildsUsecase:       buildsUsecase,
-		logsUsecase:         logsUsecase,
+		scheduler:           s,
+		repositoriesStorage: rs,
+		buildsStorage:       bs,
+		logsStorage:         ls,
 	}
 }
 
@@ -51,14 +58,14 @@ func (h Handler) Routes() *echo.Echo {
 		repositories := api.Group("/repositories")
 		{
 			repositories.POST("", h.addRepository)
-			repositories.DELETE("", h.deleteRepository)
+			repositories.DELETE("", h.removeRepository)
 			repositories.GET("", h.getRepositories)
 			repositories.GET("/:repoId", h.getRepositoryById)
 		}
 		builds := api.Group("/repositories/:repoId/builds")
 		{
-			builds.GET("", h.getBuildsByRepositoryId)
-			builds.GET("/:buildId", h.getBuild)
+			builds.GET("", h.getBuildsByRepoId)
+			builds.GET("/:buildId", h.getBuildById)
 		}
 		logs := api.Group("/logs")
 		{

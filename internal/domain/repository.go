@@ -13,8 +13,8 @@ type Repository struct {
 	CreatedAt       time.Time         `json:"created_at"`
 }
 
-type RepositoriesUsecase interface {
-	Add(Repository) error
+type RepositoriesStorage interface {
+	Create(Repository) error
 	Delete(id string) error
 	GetAll() ([]Repository, error)
 	GetById(id string) (Repository, error)

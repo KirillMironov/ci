@@ -4,6 +4,6 @@ type Log struct {
 	Data []byte
 }
 
-type LogsUsecase interface {
+type LogsStorage interface {
 	GetByBuildId(buildId string) (Log, error)
 }

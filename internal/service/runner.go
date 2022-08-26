@@ -12,8 +12,7 @@ import (
 type Runner struct {
 	run           <-chan RunRequest
 	executor      executor
-	buildsUsecase domain.BuildsUsecase
-	logsUsecase   domain.LogsUsecase
+	buildsStorage domain.BuildsStorage
 	logger        logger.Logger
 }
 
@@ -28,13 +27,11 @@ type (
 	}
 )
 
-func NewRunner(run <-chan RunRequest, executor executor, bu domain.BuildsUsecase, lu domain.LogsUsecase,
-	logger logger.Logger) *Runner {
+func NewRunner(run <-chan RunRequest, executor executor, bs domain.BuildsStorage, logger logger.Logger) *Runner {
 	return &Runner{
 		run:           run,
 		executor:      executor,
-		buildsUsecase: bu,
-		logsUsecase:   lu,
+		buildsStorage: bs,
 		logger:        logger,
 	}
 }
@@ -71,7 +68,7 @@ func (r Runner) Start(ctx context.Context) {
 
 			build.Log = domain.Log{Data: logsBuf.Bytes()}
 
-			err := r.buildsUsecase.Update(build)
+			err := r.buildsStorage.Update(build)
 			if err != nil {
 				r.logger.Error(err)
 			}

@@ -4,11 +4,9 @@ import (
 	"context"
 	"errors"
 	"github.com/KirillMironov/ci/config"
-	"github.com/KirillMironov/ci/internal/domain"
 	"github.com/KirillMironov/ci/internal/service"
 	"github.com/KirillMironov/ci/internal/storage"
 	"github.com/KirillMironov/ci/internal/transport"
-	"github.com/KirillMironov/ci/internal/usecase"
 	"github.com/docker/docker/client"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
@@ -56,27 +54,21 @@ func main() {
 
 	// App
 	var (
-		add    = make(chan domain.Repository)
-		remove = make(chan string)
-		run    = make(chan service.RunRequest)
+		run = make(chan service.RunRequest)
 
 		repositoriesStorage = storage.NewRepositories(db)
 		buildsStorage       = storage.NewBuilds(db)
 		logsStorage         = storage.NewLogs(db)
 
-		repositoriesUsecase = usecase.NewRepositories(repositoriesStorage, add, remove)
-		buildsUsecase       = usecase.NewBuilds(buildsStorage)
-		logsUsecase         = usecase.NewLogs(logsStorage)
-
 		archiver  = &service.TarArchiver{}
 		parser    = &service.YAMLParser{}
 		cloner    = service.NewCloner(cfg.RepositoriesDir)
 		executor  = service.NewDockerExecutor(cli, cfg.ContainerWorkingDir, archiver)
-		runner    = service.NewRunner(run, executor, buildsUsecase, logsUsecase, logger)
-		poller    = service.NewPoller(run, cfg.CIFilename, cloner, parser, buildsUsecase, logger)
-		scheduler = service.NewScheduler(add, remove, poller, repositoriesUsecase, logger)
+		runner    = service.NewRunner(run, executor, buildsStorage, logger)
+		poller    = service.NewPoller(run, cfg.CIFilename, cloner, parser, buildsStorage, logger)
+		scheduler = service.NewScheduler(poller, repositoriesStorage, logger)
 
-		handler = transport.NewHandler(cfg.StaticRootDir, repositoriesUsecase, buildsUsecase, logsUsecase)
+		handler = transport.NewHandler(cfg.StaticRootDir, scheduler, repositoriesStorage, buildsStorage, logsStorage)
 	)
 
 	// Scheduler & Poller & Runner
