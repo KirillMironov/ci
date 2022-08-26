@@ -16,5 +16,5 @@ func (h Handler) getLogById(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err)
 	}
 
-	return c.JSON(http.StatusOK, string(log.Data))
+	return c.JSON(http.StatusOK, log)
 }

@@ -66,7 +66,7 @@ func (r Runner) Start(ctx context.Context) {
 				}
 			}
 
-			build.Log = domain.Log{Data: logsBuf.Bytes()}
+			build.Log = domain.Log{Data: logsBuf.String()}
 
 			err := r.buildsStorage.Update(build)
 			if err != nil {

@@ -1,7 +1,7 @@
 package domain
 
 type Log struct {
-	Data []byte
+	Data string `json:"data"`
 }
 
 type LogsStorage interface {
