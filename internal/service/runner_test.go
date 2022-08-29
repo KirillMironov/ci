@@ -64,6 +64,7 @@ func TestRunner(t *testing.T) {
 			require.Len(t, builds, 1)
 
 			build := builds[0]
+			assert.NotEmpty(t, build.Id)
 			assert.Equal(t, req.repoId, build.RepoId)
 			assert.Equal(t, req.commit, build.Commit)
 			assert.Equal(t, expectedLog, build.Log.Data)
