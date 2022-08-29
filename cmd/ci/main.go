@@ -54,8 +54,6 @@ func main() {
 
 	// App
 	var (
-		run = make(chan service.RunRequest)
-
 		repositoriesStorage = storage.NewRepositories(db)
 		buildsStorage       = storage.NewBuilds(db)
 		logsStorage         = storage.NewLogs(db)
@@ -64,8 +62,8 @@ func main() {
 		parser    = &service.YAMLParser{}
 		cloner    = service.NewCloner(cfg.RepositoriesDir)
 		executor  = service.NewDockerExecutor(cli, cfg.ContainerWorkingDir, archiver)
-		runner    = service.NewRunner(run, executor, buildsStorage, logger)
-		poller    = service.NewPoller(run, cfg.CIFilename, cloner, parser, buildsStorage, logger)
+		runner    = service.NewRunner(executor, buildsStorage, logger)
+		poller    = service.NewPoller(cfg.CIFilename, cloner, parser, runner, buildsStorage, logger)
 		scheduler = service.NewScheduler(poller, repositoriesStorage, logger)
 
 		handler = transport.NewHandler(cfg.StaticRootDir, scheduler, repositoriesStorage, buildsStorage, logsStorage)

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"github.com/KirillMironov/ci/internal/domain"
 	"github.com/KirillMironov/ci/pkg/logger"
-	"github.com/rs/xid"
 	"os"
 	"path/filepath"
 	"time"
@@ -14,10 +13,10 @@ import (
 // Poller used to poll repositories and run builds.
 type Poller struct {
 	poll          chan domain.Repository
-	run           chan<- RunRequest
 	ciFilename    string
 	cloner        cloner
 	parser        parser
+	runner        runner
 	buildsStorage domain.BuildsStorage
 	logger        logger.Logger
 }
@@ -30,16 +29,19 @@ type (
 	parser interface {
 		ParsePipeline(b []byte) (domain.Pipeline, error)
 	}
+	runner interface {
+		Run(runRequest)
+	}
 )
 
-func NewPoller(run chan<- RunRequest, ciFilename string, cloner cloner, parser parser, bs domain.BuildsStorage,
+func NewPoller(ciFilename string, cloner cloner, parser parser, runner runner, bs domain.BuildsStorage,
 	logger logger.Logger) *Poller {
 	return &Poller{
-		run:           run,
 		poll:          make(chan domain.Repository),
 		ciFilename:    ciFilename,
 		cloner:        cloner,
 		parser:        parser,
+		runner:        runner,
 		buildsStorage: bs,
 		logger:        logger,
 	}
@@ -68,19 +70,6 @@ func (p Poller) Start(ctx context.Context) {
 				continue
 			}
 
-			var build = domain.Build{
-				Id:     xid.New().String(),
-				RepoId: repo.Id,
-				Commit: domain.Commit{Hash: latestHash},
-				Status: domain.InProgress,
-			}
-
-			err = p.buildsStorage.Create(build)
-			if err != nil {
-				p.logger.Error(err)
-				continue
-			}
-
 			srcCodePath, err := p.cloner.CloneRepository(repo, latestHash)
 			if err != nil {
 				p.logger.Errorf("failed to clone repository: %v", err)
@@ -99,11 +88,13 @@ func (p Poller) Start(ctx context.Context) {
 				continue
 			}
 
-			p.run <- RunRequest{
-				build:       build,
+			p.runner.Run(runRequest{
+				ctx:         ctx,
+				repoId:      repo.Id,
+				commit:      domain.Commit{Hash: latestHash},
 				pipeline:    pipeline,
 				srcCodePath: srcCodePath,
-			}
+			})
 		}
 	}
 }
