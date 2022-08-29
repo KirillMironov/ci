@@ -46,7 +46,9 @@ func (s *Scheduler) Start(ctx context.Context) {
 			}
 
 			for _, repo := range repos {
-				s.add <- repo
+				pollCtx, cancel := context.WithCancel(ctx)
+				s.activePolling[repo.Id] = cancel
+				s.poller.AddRepository(pollCtx, repo)
 			}
 		}()
 	})
