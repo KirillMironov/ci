@@ -8,7 +8,7 @@ require (
 	github.com/go-playground/validator/v10 v10.11.0
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/kelseyhightower/envconfig v1.4.0
-	github.com/labstack/echo/v4 v4.8.0
+	github.com/labstack/echo/v4 v4.9.0
 	github.com/mattn/go-sqlite3 v1.14.15
 	github.com/rs/xid v1.4.0
 	github.com/sirupsen/logrus v1.8.1
